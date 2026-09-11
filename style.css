@@ -655,7 +655,7 @@ button[type="submit"]:disabled {
     position: relative;
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    grid-template-rows: auto auto 44px 460px 1fr;
+    grid-template-rows: auto auto 44px 430px 1fr;
     gap: 24px;
     max-width: 1600px;
     margin: 0 auto;
