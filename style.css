@@ -390,10 +390,13 @@ button[type="submit"]:disabled {
 /* Tab panels sobrepostos: altura travada no maior dos dois */
 .tab-panels {
   display: grid;
+  grid-template-rows: 1fr;
 }
 
 .tab-panels .tab-panel {
   grid-area: 1 / 1;
+  min-height: 0;
+  overflow-y: auto;
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
