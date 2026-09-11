@@ -267,14 +267,37 @@ button[type="submit"]:disabled {
   margin-top: 4px;
 }
 
-.balance-value-total {
-  font-size: 16px;
-  font-weight: 400;
+.balance-value.negative {
+  color: var(--danger);
+}
+
+.balance-semanas {
+  display: flex;
+  align-items: baseline;
+  gap: 24px;
+}
+
+.balance-semana-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.balance-semana-item .balance-label {
+  order: 2;
+}
+
+.balance-value-secundario {
+  font-size: 22px;
+  font-weight: 600;
   color: var(--text-muted);
 }
 
-.balance-value.negative {
-  color: var(--danger);
+.balance-subtitulo {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
 /* Switch toggle (Entrada/Saída, Vendas Hoje/Pagamento) */

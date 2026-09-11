@@ -177,8 +177,17 @@
       <h2 class="panel-title">Contas a Pagar</h2>
 
       <section class="balance-box">
-        <span class="balance-label">Total a pagar no mês</span>
-        <span id="cp-total-mes" class="balance-value">R$ 0,00 <span class="balance-value-total">de R$ 0,00</span></span>
+        <div class="balance-semanas">
+          <span class="balance-semana-item">
+            <span id="cp-total-semana-atual" class="balance-value">R$ 0,00</span>
+            <span class="balance-label">Esta semana</span>
+          </span>
+          <span class="balance-semana-item">
+            <span id="cp-total-proxima-semana" class="balance-value-secundario">R$ 0,00</span>
+            <span class="balance-label">Próxima semana</span>
+          </span>
+        </div>
+        <span id="cp-total-mes" class="balance-subtitulo">R$ 0,00 pago de R$ 0,00 no mês</span>
       </section>
 
       <div class="switch-toggle">

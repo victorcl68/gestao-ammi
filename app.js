@@ -97,6 +97,19 @@ function semanaDoMes(isoDate) {
   return Math.ceil((dia + offsetAteDomingo(ano, mes)) / 7);
 }
 
+// Dada uma data, retorna a identidade (ano, mês, semana) de uma data que
+// cai 7 dias depois — usado para "andar" de semana em semana cruzando
+// meses sem depender dos grupos já calculados.
+function chaveSemanaSeguinte(isoDate) {
+  const [ano, mes, dia] = isoDate.split('-').map(Number);
+  const data = new Date(ano, mes - 1, dia + 7);
+  const anoSeguinte = data.getFullYear();
+  const mesSeguinte = data.getMonth() + 1;
+  const diaSeguinte = data.getDate();
+  const isoSeguinte = `${anoSeguinte}-${String(mesSeguinte).padStart(2, '0')}-${String(diaSeguinte).padStart(2, '0')}`;
+  return { ano: anoSeguinte, mes: mesSeguinte, semana: semanaDoMes(isoSeguinte), data: isoSeguinte };
+}
+
 // Agrupa ocorrências (já ordenadas por data) em blocos "Mês / Semana N".
 // Cada mês fecha suas próprias semanas — a última pode ter poucos dias
 // (ex: só 1-3 dias), e ainda assim aparece como bloco próprio.
@@ -473,6 +486,8 @@ bloquearDuranteSubmit(salPagamentoForm, async (e) => {
 // ===================== CONTAS A PAGAR =====================
 
 const cpTotalMesEl = document.getElementById('cp-total-mes');
+const cpTotalSemanaAtualEl = document.getElementById('cp-total-semana-atual');
+const cpTotalProximaSemanaEl = document.getElementById('cp-total-proxima-semana');
 const cpListEl = document.getElementById('cp-list');
 const cpContasListEl = document.getElementById('cp-contas-list');
 const cpForm = document.getElementById('cp-form');
@@ -631,7 +646,9 @@ async function carregarContasPagar() {
   if (contas.length === 0) {
     cpListEl.innerHTML = `<li class="empty-state">Nenhuma conta cadastrada.</li>`;
     cpContasListEl.innerHTML = `<li class="empty-state">Nenhuma conta cadastrada.</li>`;
-    cpTotalMesEl.innerHTML = `${formatMoney(0)} <span class="balance-value-total">de ${formatMoney(0)}</span>`;
+    cpTotalMesEl.textContent = `${formatMoney(0)} pago de ${formatMoney(0)} no mês`;
+    cpTotalSemanaAtualEl.textContent = formatMoney(0);
+    cpTotalProximaSemanaEl.textContent = formatMoney(0);
     return;
   }
 
@@ -672,10 +689,44 @@ async function carregarContasPagar() {
 
   ocorrenciasParaExibir.sort((a, b) => a.data.localeCompare(b.data));
   const totalMesGeral = totalMesPago + totalMesNaoPago;
-  cpTotalMesEl.innerHTML = `${formatMoney(totalMesNaoPago)} <span class="balance-value-total">de ${formatMoney(totalMesGeral)}</span>`;
+  cpTotalMesEl.textContent = `${formatMoney(totalMesNaoPago)} pago de ${formatMoney(totalMesGeral)} no mês`;
 
-  const [anoHoje, mesHoje] = hoje.split('-').map(Number);
-  const semanaHoje = semanaDoMes(hoje);
+  const gruposSemanaTodos = agruparPorSemana(ocorrenciasParaExibir);
+
+  function totalPendenteDaSemana(ano, mes, semana) {
+    const grupo = gruposSemanaTodos.find((g) => g.ano === ano && g.mes === mes && g.semana === semana);
+    if (!grupo) return null;
+    const pendentes = grupo.itens.filter((i) => !i.paga);
+    if (pendentes.length === 0) return null;
+    return pendentes.reduce((acc, i) => acc + i.valor, 0);
+  }
+
+  // Acha a primeira semana (a partir de `dataRef`) que ainda tem alguma
+  // ocorrência não paga. Se a semana atual já está toda paga (ou vazia),
+  // avança semana a semana até achar uma com pendência — sem limite.
+  function acharSemanaComPendencia(dataRef) {
+    while (true) {
+      const [ano, mes] = dataRef.split('-').map(Number);
+      const semana = semanaDoMes(dataRef);
+      const total = totalPendenteDaSemana(ano, mes, semana);
+
+      if (total !== null) {
+        return { ano, mes, semana, dataRef, total };
+      }
+
+      dataRef = chaveSemanaSeguinte(dataRef).data;
+    }
+  }
+
+  const semanaAtual = acharSemanaComPendencia(hoje);
+  const proximaSemana = acharSemanaComPendencia(chaveSemanaSeguinte(semanaAtual.dataRef).data);
+
+  cpTotalSemanaAtualEl.textContent = formatMoney(semanaAtual.total);
+  cpTotalProximaSemanaEl.textContent = formatMoney(proximaSemana.total);
+
+  const anoHoje = semanaAtual.ano;
+  const mesHoje = semanaAtual.mes;
+  const semanaHoje = semanaAtual.semana;
 
   function ehGrupoDaSemanaAtual(grupo) {
     return grupo.ano === anoHoje && grupo.mes === mesHoje && grupo.semana === semanaHoje;
