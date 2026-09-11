@@ -31,6 +31,7 @@ Depois abra o endereço indicado no navegador. Abrir o `index.html` direto como 
 2. Abra o **SQL Editor** do projeto e rode, em ordem, os arquivos da pasta [migrations/](migrations) — cada um cria suas tabelas, índices e políticas de Row Level Security (RLS):
    - [001_caixa_casa_e_salario.sql](migrations/001_caixa_casa_e_salario.sql) — tabelas `caixa_casa_lancamentos` e `salario_lancamentos`.
    - [002_contas_pagar.sql](migrations/002_contas_pagar.sql) — tabelas `contas_pagar`, `contas_pagar_exdates`, `contas_pagar_parcelas` e `contas_pagar_pagamentos`.
+   - [003_contas_pagar_ajustes.sql](migrations/003_contas_pagar_ajustes.sql) — tabela `contas_pagar_ajustes`, para corrigir o valor de uma ocorrência pontual sem alterar o padrão da conta.
 3. Em **Authentication → Providers → Email**, desative **"Allow new users to sign up"**. Isso é importante: sem essa etapa, qualquer pessoa que abrir o site poderia criar a própria conta e logar.
 4. Em **Authentication → Users**, crie manualmente o(s) usuário(s) que vão acessar o painel (e-mail + senha). Todos os usuários autenticados enxergam e lançam os mesmos dados — não há separação por usuário.
 5. Em **Project Settings → API Keys**, copie a **Project URL** e a chave pública (**anon key** ou, em projetos mais novos, **Publishable key** — formato `sb_publishable_...`).
