@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
   <link rel="icon" type="image/png" href="ammi-logo.png">
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
   <!-- ===================== LOGIN ===================== -->
@@ -32,7 +34,8 @@
   <main id="view-home" class="page view" hidden>
     <header class="topbar topbar-end">
       <button id="logout-btn" class="btn-icon" aria-label="Sair" title="Sair">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
           <polyline points="16 17 21 12 16 7"></polyline>
           <line x1="21" y1="12" x2="9" y2="12"></line>
@@ -59,7 +62,8 @@
   <!-- ===================== DESKTOP: as duas lado a lado ===================== -->
   <div id="desktop-grid" class="desktop-grid" hidden>
     <button id="logout-btn-desktop" class="btn-icon desktop-logout" aria-label="Sair" title="Sair">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">
         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
         <polyline points="16 17 21 12 16 7"></polyline>
         <line x1="21" y1="12" x2="9" y2="12"></line>
@@ -178,10 +182,10 @@
       </section>
 
       <div class="switch-toggle">
-        <input type="radio" name="cp-fim-tipo" id="cp-fim-nunca" value="nunca" checked>
-        <label for="cp-fim-nunca">Sem fim</label>
-        <input type="radio" name="cp-fim-tipo" id="cp-fim-data" value="data">
-        <label for="cp-fim-data">Com fim</label>
+        <input type="radio" name="cp-tipo" id="cp-tipo-recorrente" value="recorrente" checked>
+        <label for="cp-tipo-recorrente">Mensal</label>
+        <input type="radio" name="cp-tipo" id="cp-tipo-parcelado" value="parcelado">
+        <label for="cp-tipo-parcelado">Parcelado</label>
         <span class="switch-thumb"></span>
       </div>
 
@@ -189,13 +193,20 @@
         <label for="cp-valor">Valor</label>
         <input type="text" id="cp-valor" inputmode="decimal" placeholder="0,00" required>
 
-        <label for="cp-data-inicio">Data</label>
-        <input type="date" id="cp-data-inicio" required>
+        <div id="cp-campo-data-unica">
+          <label for="cp-data-inicio">Data</label>
+          <input type="date" id="cp-data-inicio" required>
+        </div>
+
+        <div id="cp-campo-parcelas" hidden>
+          <label for="cp-qtde-parcelas">Quantidade de parcelas</label>
+          <input type="text" id="cp-qtde-parcelas" inputmode="numeric" maxlength="2" placeholder="Ex: 3">
+
+          <div id="cp-datas-parcelas"></div>
+        </div>
 
         <label for="cp-descricao">Descrição</label>
         <input type="text" id="cp-descricao" placeholder="Ex: Aluguel" required>
-
-        <input type="date" id="cp-data-fim" hidden>
 
         <button type="submit">Salvar</button>
         <p id="cp-form-error" class="error" hidden></p>
@@ -217,4 +228,5 @@
 
   <script type="module" src="app.js"></script>
 </body>
+
 </html>

@@ -11,6 +11,7 @@ const CC_TABLE = 'caixa_casa_lancamentos';
 const SAL_TABLE = 'salario_lancamentos';
 const CP_TABLE = 'contas_pagar';
 const CP_EXDATES_TABLE = 'contas_pagar_exdates';
+const CP_PARCELAS_TABLE = 'contas_pagar_parcelas';
 const CP_PAGAMENTOS_TABLE = 'contas_pagar_pagamentos';
 const PERCENTUAL_COMISSAO = 0.25;
 
@@ -420,13 +421,40 @@ const cpErrorEl = document.getElementById('cp-form-error');
 const cpDescricaoInput = document.getElementById('cp-descricao');
 const cpValorInput = document.getElementById('cp-valor');
 const cpDataInicioInput = document.getElementById('cp-data-inicio');
-const cpDataFimInput = document.getElementById('cp-data-fim');
+const cpCampoDataUnicaEl = document.getElementById('cp-campo-data-unica');
+const cpCampoParcelasEl = document.getElementById('cp-campo-parcelas');
+const cpQtdeParcelasInput = document.getElementById('cp-qtde-parcelas');
+const cpDatasParcelasEl = document.getElementById('cp-datas-parcelas');
 aplicarMascaraMoney(cpValorInput);
 
-document.querySelectorAll('input[name="cp-fim-tipo"]').forEach((el) => {
+document.querySelectorAll('input[name="cp-tipo"]').forEach((el) => {
   el.addEventListener('change', () => {
-    cpDataFimInput.hidden = el.value !== 'data';
+    const parcelado = el.value === 'parcelado';
+    cpCampoDataUnicaEl.hidden = parcelado;
+    cpCampoParcelasEl.hidden = !parcelado;
+    cpDataInicioInput.required = !parcelado;
   });
+});
+
+cpQtdeParcelasInput.addEventListener('input', () => {
+  cpQtdeParcelasInput.value = cpQtdeParcelasInput.value.replace(/\D/g, '');
+  const qtde = Math.min(Number(cpQtdeParcelasInput.value) || 0, 24);
+
+  const existentes = cpDatasParcelasEl.querySelectorAll('input[type="date"]');
+  if (qtde < existentes.length) {
+    existentes.forEach((el, i) => { if (i >= qtde) el.closest('.campo-parcela').remove(); });
+    return;
+  }
+
+  for (let i = existentes.length; i < qtde; i++) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'campo-parcela';
+    wrapper.innerHTML = `
+      <label>Data da parcela ${i + 1}</label>
+      <input type="date" class="cp-data-parcela" required>
+    `;
+    cpDatasParcelasEl.appendChild(wrapper);
+  }
 });
 
 // Último dia válido do mês/ano para um dia_vencimento que pode não existir
@@ -442,9 +470,9 @@ function montarDataOcorrencia(ano, mesIndex, diaVencimento) {
   return `${ano}-${mm}-${dd}`;
 }
 
-// Gera todas as datas de vencimento de conta_inicio até `ate` (inclusive),
-// respeitando data_fim (se houver) e pulando datas em exdates.
-function gerarOcorrenciasAte(conta, exdates, ate) {
+// Gera todas as datas de vencimento de uma conta recorrente, de
+// data_inicio até `ate` (inclusive), pulando datas em exdates.
+function gerarOcorrenciasRecorrenteAte(conta, exdates, ate) {
   const [anoIni, mesIni] = conta.data_inicio.split('-').map(Number);
 
   const ocorrencias = [];
@@ -454,7 +482,6 @@ function gerarOcorrenciasAte(conta, exdates, ate) {
   while (true) {
     const data = montarDataOcorrencia(ano, mesIndex, conta.dia_vencimento);
     if (data > ate) break;
-    if (conta.data_fim && data > conta.data_fim) break;
 
     if (data >= conta.data_inicio && !exdates.has(data)) {
       ocorrencias.push(data);
@@ -470,12 +497,12 @@ function gerarOcorrenciasAte(conta, exdates, ate) {
   return ocorrencias;
 }
 
-// Ocorrências vencidas (< hoje) e não pagas de uma conta, mais as próximas
-// `qtdeFuturas` a partir de hoje (inclusive).
-function gerarOcorrenciasParaExibir(conta, exdates, pagosSet, qtdeFuturas) {
+// Ocorrências vencidas (< hoje) e não pagas de uma conta recorrente, mais
+// as próximas `qtdeFuturas` a partir de hoje (inclusive).
+function gerarOcorrenciasRecorrenteParaExibir(conta, exdates, pagosSet, qtdeFuturas) {
   const hoje = hojeISO();
 
-  const atrasadas = gerarOcorrenciasAte(conta, exdates, hoje)
+  const atrasadas = gerarOcorrenciasRecorrenteAte(conta, exdates, hoje)
     .filter((data) => data < hoje && !pagosSet.has(`${conta.id}|${data}`));
 
   const futuras = [];
@@ -485,7 +512,6 @@ function gerarOcorrenciasParaExibir(conta, exdates, pagosSet, qtdeFuturas) {
 
   while (futuras.length < qtdeFuturas) {
     const data = montarDataOcorrencia(ano, mesIndex, conta.dia_vencimento);
-    if (conta.data_fim && data > conta.data_fim) break;
     if (data >= hoje && data >= conta.data_inicio && !exdates.has(data)) {
       futuras.push(data);
     }
@@ -502,13 +528,19 @@ function gerarOcorrenciasParaExibir(conta, exdates, pagosSet, qtdeFuturas) {
 async function carregarContasPagar() {
   cpDataInicioInput.value = cpDataInicioInput.value || hojeISO();
 
-  const [{ data: contas, error: errContas }, { data: exdatesRows, error: errEx }, { data: pagos, error: errPag }] = await Promise.all([
-    supabase.from(CP_TABLE).select('*').order('dia_vencimento', { ascending: true }),
+  const [
+    { data: contas, error: errContas },
+    { data: exdatesRows, error: errEx },
+    { data: parcelasRows, error: errParc },
+    { data: pagos, error: errPag },
+  ] = await Promise.all([
+    supabase.from(CP_TABLE).select('*').order('data_inicio', { ascending: true }),
     supabase.from(CP_EXDATES_TABLE).select('*'),
+    supabase.from(CP_PARCELAS_TABLE).select('*'),
     supabase.from(CP_PAGAMENTOS_TABLE).select('*'),
   ]);
 
-  if (errContas || errEx || errPag) {
+  if (errContas || errEx || errParc || errPag) {
     cpListEl.innerHTML = `<li class="empty-state">Erro ao carregar contas a pagar.</li>`;
     cpContasListEl.innerHTML = '';
     return;
@@ -529,10 +561,18 @@ async function carregarContasPagar() {
   const ocorrenciasParaExibir = [];
 
   contas.forEach((conta) => {
-    const exdatesDaConta = new Set(
-      exdatesRows.filter((e) => e.conta_id === conta.id).map((e) => e.data)
-    );
-    const ocorrencias = gerarOcorrenciasParaExibir(conta, exdatesDaConta, pagosSet, 3);
+    let ocorrencias;
+
+    if (conta.tipo === 'parcelado') {
+      ocorrencias = parcelasRows
+        .filter((p) => p.conta_id === conta.id)
+        .map((p) => p.data);
+    } else {
+      const exdatesDaConta = new Set(
+        exdatesRows.filter((e) => e.conta_id === conta.id).map((e) => e.data)
+      );
+      ocorrencias = gerarOcorrenciasRecorrenteParaExibir(conta, exdatesDaConta, pagosSet, 3);
+    }
 
     ocorrencias.forEach((data) => {
       const paga = pagosSet.has(`${conta.id}|${data}`);
@@ -557,7 +597,7 @@ async function carregarContasPagar() {
         </div>
       </label>
       <span class="lancamento-valor negativo">${formatMoney(conta.valor)}</span>
-      <button type="button" class="btn-icon cp-pular-btn" data-conta-id="${conta.id}" data-data="${data}" aria-label="Pular esta ocorrência" title="Pular esta ocorrência">
+      <button type="button" class="btn-icon cp-pular-btn" data-conta-id="${conta.id}" data-data="${data}" data-tipo="${conta.tipo}" aria-label="Pular esta ocorrência" title="Pular esta ocorrência">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18"></line>
           <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -569,8 +609,8 @@ async function carregarContasPagar() {
   cpContasListEl.innerHTML = contas.map((conta) => `
     <li class="lancamento-item">
       <div class="lancamento-info">
-        <span class="lancamento-desc">${conta.descricao} — dia ${conta.dia_vencimento}</span>
-        <span class="lancamento-data">${conta.data_fim ? `até ${formatDataBR(conta.data_fim)}` : 'sem fim'}</span>
+        <span class="lancamento-desc">${conta.descricao}</span>
+        <span class="lancamento-data">${conta.tipo === 'parcelado' ? 'parcelado' : `mensal — dia ${conta.dia_vencimento}`}</span>
       </div>
       <span class="lancamento-valor negativo">${formatMoney(conta.valor)}</span>
       <button type="button" class="btn-icon cp-remover-btn" data-conta-id="${conta.id}" aria-label="Remover conta" title="Remover conta">
@@ -599,14 +639,19 @@ cpListEl.addEventListener('change', async (e) => {
 cpListEl.addEventListener('click', async (e) => {
   const btn = e.target.closest('.cp-pular-btn');
   if (!btn) return;
-  await supabase.from(CP_EXDATES_TABLE).insert({ conta_id: btn.dataset.contaId, data: btn.dataset.data });
+
+  if (btn.dataset.tipo === 'parcelado') {
+    await supabase.from(CP_PARCELAS_TABLE).delete().eq('conta_id', btn.dataset.contaId).eq('data', btn.dataset.data);
+  } else {
+    await supabase.from(CP_EXDATES_TABLE).insert({ conta_id: btn.dataset.contaId, data: btn.dataset.data });
+  }
   await carregarContasPagar();
 });
 
 cpContasListEl.addEventListener('click', async (e) => {
   const btn = e.target.closest('.cp-remover-btn');
   if (!btn) return;
-  if (!confirm('Remover esta conta e todo o seu histórico de pagamentos/exceções?')) return;
+  if (!confirm('Remover esta conta e todo o seu histórico de pagamentos/parcelas/exceções?')) return;
   await supabase.from(CP_TABLE).delete().eq('id', btn.dataset.contaId);
   await carregarContasPagar();
 });
@@ -617,10 +662,7 @@ cpForm.addEventListener('submit', async (e) => {
 
   const descricao = cpDescricaoInput.value.trim();
   const valor = parseMoney(cpValorInput.value);
-  const dataInicio = cpDataInicioInput.value;
-  const dia = dataInicio ? Number(dataInicio.split('-')[2]) : null;
-  const fimTipo = document.querySelector('input[name="cp-fim-tipo"]:checked').value;
-  const dataFim = fimTipo === 'data' ? cpDataFimInput.value : null;
+  const tipo = document.querySelector('input[name="cp-tipo"]:checked').value;
 
   if (!valor || valor <= 0) {
     cpErrorEl.textContent = 'Informe um valor válido.';
@@ -628,35 +670,68 @@ cpForm.addEventListener('submit', async (e) => {
     return;
   }
 
-  if (!dataInicio) {
-    cpErrorEl.textContent = 'Informe a data de início.';
-    cpErrorEl.hidden = false;
-    return;
-  }
+  if (tipo === 'recorrente') {
+    const dataInicio = cpDataInicioInput.value;
+    if (!dataInicio) {
+      cpErrorEl.textContent = 'Informe a data.';
+      cpErrorEl.hidden = false;
+      return;
+    }
 
-  if (fimTipo === 'data' && !dataFim) {
-    cpErrorEl.textContent = 'Informe a data de fim ou escolha "Sem fim".';
-    cpErrorEl.hidden = false;
-    return;
-  }
+    const dia = Number(dataInicio.split('-')[2]);
+    const { error } = await supabase.from(CP_TABLE).insert({
+      descricao,
+      valor,
+      tipo: 'recorrente',
+      dia_vencimento: dia,
+      data_inicio: dataInicio,
+    });
 
-  const { error } = await supabase.from(CP_TABLE).insert({
-    descricao,
-    valor,
-    dia_vencimento: dia,
-    data_inicio: dataInicio,
-    data_fim: dataFim,
-  });
+    if (error) {
+      cpErrorEl.textContent = 'Erro ao salvar. Tente novamente.';
+      cpErrorEl.hidden = false;
+      return;
+    }
+  } else {
+    const datasParcelas = Array.from(cpDatasParcelasEl.querySelectorAll('.cp-data-parcela')).map((el) => el.value);
 
-  if (error) {
-    cpErrorEl.textContent = 'Erro ao salvar. Tente novamente.';
-    cpErrorEl.hidden = false;
-    return;
+    if (datasParcelas.length === 0 || datasParcelas.some((d) => !d)) {
+      cpErrorEl.textContent = 'Informe a quantidade de parcelas e preencha todas as datas.';
+      cpErrorEl.hidden = false;
+      return;
+    }
+
+    const dataInicio = [...datasParcelas].sort()[0];
+
+    const { data: contaCriada, error } = await supabase.from(CP_TABLE).insert({
+      descricao,
+      valor,
+      tipo: 'parcelado',
+      data_inicio: dataInicio,
+    }).select().single();
+
+    if (error) {
+      cpErrorEl.textContent = 'Erro ao salvar. Tente novamente.';
+      cpErrorEl.hidden = false;
+      return;
+    }
+
+    const { error: errParcelas } = await supabase.from(CP_PARCELAS_TABLE).insert(
+      datasParcelas.map((data) => ({ conta_id: contaCriada.id, data }))
+    );
+
+    if (errParcelas) {
+      cpErrorEl.textContent = 'Conta criada, mas houve erro ao salvar as parcelas.';
+      cpErrorEl.hidden = false;
+      return;
+    }
   }
 
   cpForm.reset();
   cpDataInicioInput.value = hojeISO();
-  cpDataFimInput.hidden = true;
+  cpCampoDataUnicaEl.hidden = false;
+  cpCampoParcelasEl.hidden = true;
+  cpDatasParcelasEl.innerHTML = '';
   await carregarContasPagar();
 });
 
