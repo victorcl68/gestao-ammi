@@ -699,6 +699,22 @@ button[type="submit"]:disabled {
     grid-row: 4;
   }
 
+  .desktop-grid .panel .card {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    height: 100%;
+  }
+
+  .desktop-grid .panel .card button[type="submit"] {
+    margin-top: auto;
+  }
+
+  .desktop-grid .panel .tab-panels {
+    align-self: stretch;
+    height: 100%;
+  }
+
   .desktop-grid .panel .list,
   .desktop-grid .panel .list-group {
     grid-row: 5;
