@@ -715,29 +715,21 @@ async function carregarContasPagar() {
   });
 
   ocorrenciasParaExibir.sort((a, b) => a.data.localeCompare(b.data));
-  ocorrenciasPagas.sort((a, b) => b.data.localeCompare(a.data));
+  ocorrenciasPagas.sort((a, b) => a.data.localeCompare(b.data));
   const totalMesGeral = totalMesPago + totalMesNaoPago;
   cpTotalMesEl.innerHTML = `${formatMoney(totalMesNaoPago)} <span class="balance-value-total">de ${formatMoney(totalMesGeral)}</span>`;
 
-  const gruposSemana = agruparPorSemana(ocorrenciasParaExibir);
   const [anoHoje, mesHoje] = hoje.split('-').map(Number);
   const semanaHoje = semanaDoMes(hoje);
 
-  cpListEl.innerHTML = gruposSemana.map((grupo) => {
+  function ehGrupoDaSemanaAtual(grupo) {
     const semanaAnteriorFundida = grupo.semanaFundida ? grupo.semana - 1 : grupo.semana;
-    const ehSemanaAtual = grupo.ano === anoHoje && grupo.mes === mesHoje
+    return grupo.ano === anoHoje && grupo.mes === mesHoje
       && semanaHoje >= semanaAnteriorFundida && semanaHoje <= grupo.semana;
+  }
 
-    const itensHtml = grupo.itens.map(({ conta, data, valor, paga, atrasada }) => `
-      <li class="lancamento-item${atrasada ? ' lancamento-atrasada' : ''}">
-        <label class="lancamento-checkbox">
-          <input type="checkbox" data-conta-id="${conta.id}" data-data="${data}" class="cp-pago-checkbox" ${paga ? 'checked' : ''}>
-          <div class="lancamento-info">
-            <span class="lancamento-desc">${conta.descricao}${atrasada ? ' <span class="tag-atrasada">Atrasada</span>' : ''}</span>
-            <span class="lancamento-data">${formatDataBR(data)}</span>
-          </div>
-        </label>
-        <span class="lancamento-valor negativo">${formatMoney(valor)}</span>
+  function renderizarItemOcorrencia({ conta, data, valor, paga, atrasada }) {
+    const botoesAcao = paga ? '' : `
         <button type="button" class="btn-icon btn-icon-neutro cp-editar-btn" data-conta-id="${conta.id}" data-data="${data}" data-tipo="${conta.tipo}" data-valor="${valor}" aria-label="Editar valor" title="Editar valor">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -749,38 +741,49 @@ async function carregarContasPagar() {
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
           </svg>
-        </button>
-      </li>
-    `).join('');
-
-    const rotuloSemana = grupo.semanaFundida
-      ? `Semana ${grupo.semana - 1}-${grupo.semana}`
-      : `Semana ${grupo.semana}`;
+        </button>`;
 
     return `
-      <li class="semana-grupo">
-        <span class="semana-grupo-titulo${ehSemanaAtual ? ' semana-atual' : ''}">
-          ${NOMES_MES[grupo.mes - 1]} — ${rotuloSemana}${ehSemanaAtual ? '<span class="semana-atual-dot"></span>' : ''}
-        </span>
-        <ul class="lancamentos">${itensHtml}</ul>
-      </li>
-    `;
-  }).join('');
-
-  cpPagosListEl.innerHTML = ocorrenciasPagas.length === 0
-    ? `<li class="empty-state">Nenhum pagamento ainda.</li>`
-    : ocorrenciasPagas.map(({ conta, data, valor }) => `
-      <li class="lancamento-item">
+      <li class="lancamento-item${atrasada ? ' lancamento-atrasada' : ''}">
         <label class="lancamento-checkbox">
-          <input type="checkbox" data-conta-id="${conta.id}" data-data="${data}" class="cp-pago-checkbox" checked>
+          <input type="checkbox" data-conta-id="${conta.id}" data-data="${data}" class="cp-pago-checkbox" ${paga ? 'checked' : ''}>
           <div class="lancamento-info">
-            <span class="lancamento-desc">${conta.descricao}</span>
+            <span class="lancamento-desc">${conta.descricao}${atrasada ? ' <span class="tag-atrasada">Atrasada</span>' : ''}</span>
             <span class="lancamento-data">${formatDataBR(data)}</span>
           </div>
         </label>
-        <span class="lancamento-valor negativo">${formatMoney(valor)}</span>
+        <span class="lancamento-valor negativo">${formatMoney(valor)}</span>${botoesAcao}
       </li>
-    `).join('');
+    `;
+  }
+
+  function renderizarGruposSemana(grupos) {
+    return grupos.map((grupo) => {
+      const ehSemanaAtual = ehGrupoDaSemanaAtual(grupo);
+      const itensHtml = grupo.itens.map(renderizarItemOcorrencia).join('');
+      const rotuloSemana = grupo.semanaFundida
+        ? `Semana ${grupo.semana - 1}-${grupo.semana}`
+        : `Semana ${grupo.semana}`;
+
+      return `
+        <li class="semana-grupo">
+          <span class="semana-grupo-titulo${ehSemanaAtual ? ' semana-atual' : ''}">
+            ${NOMES_MES[grupo.mes - 1]} — ${rotuloSemana}${ehSemanaAtual ? '<span class="semana-atual-dot"></span>' : ''}
+          </span>
+          <ul class="lancamentos">${itensHtml}</ul>
+        </li>
+      `;
+    }).join('');
+  }
+
+  cpListEl.innerHTML = renderizarGruposSemana(agruparPorSemana(ocorrenciasParaExibir));
+
+  const gruposPagos = agruparPorSemana(ocorrenciasPagas).reverse();
+  gruposPagos.forEach((grupo) => grupo.itens.reverse());
+
+  cpPagosListEl.innerHTML = ocorrenciasPagas.length === 0
+    ? `<li class="empty-state">Nenhum pagamento ainda.</li>`
+    : renderizarGruposSemana(gruposPagos);
 
   cpContasListEl.innerHTML = contas.map((conta) => {
     const valorExibido = conta.tipo === 'parcelado'
