@@ -516,6 +516,10 @@ button[type="submit"]:active {
 }
 
 .desktop-grid {
+  display: contents;
+}
+
+.desktop-logout {
   display: none;
 }
 
@@ -535,6 +539,7 @@ button[type="submit"]:active {
   }
 
   .desktop-logout {
+    display: flex;
     position: absolute;
     top: 32px;
     right: 16px;
