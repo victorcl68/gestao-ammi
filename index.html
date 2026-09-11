@@ -49,6 +49,10 @@
         <span class="menu-title">Salário</span>
         <span class="menu-sub">Comissão e retiradas</span>
       </button>
+      <button class="menu-card" data-nav="contas-pagar">
+        <span class="menu-title">Contas a Pagar</span>
+        <span class="menu-sub">Recorrências mensais</span>
+      </button>
     </nav>
   </main>
 
@@ -158,6 +162,59 @@
         <summary>Últimos lançamentos</summary>
         <ul id="sal-list" class="lancamentos"></ul>
       </details>
+    </main>
+
+    <!-- ===================== CONTAS A PAGAR ===================== -->
+    <main id="view-contas-pagar" class="page view panel" hidden>
+      <header class="topbar">
+        <button class="btn-link" data-nav="home">&larr; Início</button>
+        <h1>Contas a Pagar</h1>
+      </header>
+      <h2 class="panel-title">Contas a Pagar</h2>
+
+      <section class="balance-box">
+        <span class="balance-label">Total previsto no mês</span>
+        <span id="cp-total-mes" class="balance-value">R$ 0,00</span>
+      </section>
+
+      <form id="cp-form" class="card">
+        <label for="cp-nome">Nome</label>
+        <input type="text" id="cp-nome" placeholder="Ex: Aluguel" required>
+
+        <label for="cp-valor">Valor</label>
+        <input type="text" id="cp-valor" inputmode="decimal" placeholder="0,00" required>
+
+        <label for="cp-dia">Dia do vencimento</label>
+        <input type="text" id="cp-dia" inputmode="numeric" maxlength="2" placeholder="Ex: 10" required>
+
+        <label for="cp-data-inicio">Começa em</label>
+        <input type="date" id="cp-data-inicio" required>
+
+        <div class="switch-toggle">
+          <input type="radio" name="cp-fim-tipo" id="cp-fim-nunca" value="nunca" checked>
+          <label for="cp-fim-nunca">Sem fim</label>
+          <input type="radio" name="cp-fim-tipo" id="cp-fim-data" value="data">
+          <label for="cp-fim-data">Com fim</label>
+          <span class="switch-thumb"></span>
+        </div>
+
+        <input type="date" id="cp-data-fim" hidden>
+
+        <button type="submit">Salvar</button>
+        <p id="cp-form-error" class="error" hidden></p>
+      </form>
+
+      <div class="list-group">
+        <details class="list" open>
+          <summary>Próximas ocorrências</summary>
+          <ul id="cp-list" class="lancamentos"></ul>
+        </details>
+
+        <details class="list">
+          <summary>Contas cadastradas</summary>
+          <ul id="cp-contas-list" class="lancamentos"></ul>
+        </details>
+      </div>
     </main>
   </div>
 

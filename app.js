@@ -9,6 +9,9 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const CC_TABLE = 'caixa_casa_lancamentos';
 const SAL_TABLE = 'salario_lancamentos';
+const CP_TABLE = 'contas_pagar';
+const CP_EXDATES_TABLE = 'contas_pagar_exdates';
+const CP_PAGAMENTOS_TABLE = 'contas_pagar_pagamentos';
 const PERCENTUAL_COMISSAO = 0.25;
 
 // ===================== HELPERS: dinheiro / data =====================
@@ -70,6 +73,7 @@ const views = {
   home: document.getElementById('view-home'),
   'caixa-casa': document.getElementById('view-caixa-casa'),
   salario: document.getElementById('view-salario'),
+  'contas-pagar': document.getElementById('view-contas-pagar'),
 };
 
 const desktopGridEl = document.getElementById('desktop-grid');
@@ -84,6 +88,7 @@ function showView(name) {
 
   if (name === 'caixa-casa' || name === 'home') carregarCaixaCasa();
   if (name === 'salario' || name === 'home') carregarSalario();
+  if (name === 'contas-pagar' || name === 'home') carregarContasPagar();
 }
 
 document.querySelectorAll('[data-nav]').forEach((el) => {
@@ -403,6 +408,232 @@ salPagamentoForm.addEventListener('submit', async (e) => {
   salPagamentoDataInput.value = hojeISO();
   salPagamentoDescricaoInput.value = 'Saque';
   await carregarSalario();
+});
+
+// ===================== CONTAS A PAGAR =====================
+
+const cpTotalMesEl = document.getElementById('cp-total-mes');
+const cpListEl = document.getElementById('cp-list');
+const cpContasListEl = document.getElementById('cp-contas-list');
+const cpForm = document.getElementById('cp-form');
+const cpErrorEl = document.getElementById('cp-form-error');
+const cpNomeInput = document.getElementById('cp-nome');
+const cpValorInput = document.getElementById('cp-valor');
+const cpDiaInput = document.getElementById('cp-dia');
+const cpDataInicioInput = document.getElementById('cp-data-inicio');
+const cpDataFimInput = document.getElementById('cp-data-fim');
+aplicarMascaraMoney(cpValorInput);
+
+cpDiaInput.addEventListener('input', () => {
+  cpDiaInput.value = cpDiaInput.value.replace(/\D/g, '');
+});
+
+document.querySelectorAll('input[name="cp-fim-tipo"]').forEach((el) => {
+  el.addEventListener('change', () => {
+    cpDataFimInput.hidden = el.value !== 'data';
+  });
+});
+
+// Último dia válido do mês/ano para um dia_vencimento que pode não existir
+// em todo mês (ex: dia 31 em abril vira 30).
+function ultimoDiaDoMes(ano, mesIndex) {
+  return new Date(ano, mesIndex + 1, 0).getDate();
+}
+
+function montarDataOcorrencia(ano, mesIndex, diaVencimento) {
+  const dia = Math.min(diaVencimento, ultimoDiaDoMes(ano, mesIndex));
+  const mm = String(mesIndex + 1).padStart(2, '0');
+  const dd = String(dia).padStart(2, '0');
+  return `${ano}-${mm}-${dd}`;
+}
+
+// Gera as próximas `qtde` ocorrências (>= hoje) de uma conta recorrente
+// mensal, respeitando data_fim (se houver) e pulando datas em exdates.
+function gerarProximasOcorrencias(conta, exdates, qtde) {
+  const hoje = hojeISO();
+  const inicio = conta.data_inicio > hoje ? conta.data_inicio : hoje;
+  const [anoIni, mesIni] = inicio.split('-').map(Number);
+
+  const ocorrencias = [];
+  let ano = anoIni;
+  let mesIndex = mesIni - 1;
+
+  while (ocorrencias.length < qtde) {
+    const data = montarDataOcorrencia(ano, mesIndex, conta.dia_vencimento);
+
+    if (conta.data_fim && data > conta.data_fim) break;
+    if (data >= inicio && !exdates.has(data)) {
+      ocorrencias.push(data);
+    }
+
+    mesIndex += 1;
+    if (mesIndex > 11) {
+      mesIndex = 0;
+      ano += 1;
+    }
+  }
+
+  return ocorrencias;
+}
+
+async function carregarContasPagar() {
+  cpDataInicioInput.value = cpDataInicioInput.value || hojeISO();
+
+  const [{ data: contas, error: errContas }, { data: exdatesRows, error: errEx }, { data: pagos, error: errPag }] = await Promise.all([
+    supabase.from(CP_TABLE).select('*').order('dia_vencimento', { ascending: true }),
+    supabase.from(CP_EXDATES_TABLE).select('*'),
+    supabase.from(CP_PAGAMENTOS_TABLE).select('*'),
+  ]);
+
+  if (errContas || errEx || errPag) {
+    cpListEl.innerHTML = `<li class="empty-state">Erro ao carregar contas a pagar.</li>`;
+    cpContasListEl.innerHTML = '';
+    return;
+  }
+
+  const pagosSet = new Set(pagos.map((p) => `${p.conta_id}|${p.data}`));
+
+  if (contas.length === 0) {
+    cpListEl.innerHTML = `<li class="empty-state">Nenhuma conta cadastrada.</li>`;
+    cpContasListEl.innerHTML = `<li class="empty-state">Nenhuma conta cadastrada.</li>`;
+    cpTotalMesEl.textContent = formatMoney(0);
+    return;
+  }
+
+  const hoje = hojeISO();
+  const mesAtual = hoje.slice(0, 7);
+  let totalMes = 0;
+  const ocorrenciasParaExibir = [];
+
+  contas.forEach((conta) => {
+    const exdatesDaConta = new Set(
+      exdatesRows.filter((e) => e.conta_id === conta.id).map((e) => e.data)
+    );
+    const proximas = gerarProximasOcorrencias(conta, exdatesDaConta, 3);
+
+    proximas.forEach((data) => {
+      const paga = pagosSet.has(`${conta.id}|${data}`);
+      if (data.slice(0, 7) === mesAtual && !paga) {
+        totalMes += Number(conta.valor);
+      }
+      ocorrenciasParaExibir.push({ conta, data, paga });
+    });
+  });
+
+  ocorrenciasParaExibir.sort((a, b) => a.data.localeCompare(b.data));
+  cpTotalMesEl.textContent = formatMoney(totalMes);
+
+  cpListEl.innerHTML = ocorrenciasParaExibir.map(({ conta, data, paga }) => `
+    <li class="lancamento-item">
+      <label class="lancamento-checkbox">
+        <input type="checkbox" data-conta-id="${conta.id}" data-data="${data}" class="cp-pago-checkbox" ${paga ? 'checked' : ''}>
+        <div class="lancamento-info">
+          <span class="lancamento-desc">${conta.nome}</span>
+          <span class="lancamento-data">${formatDataBR(data)}</span>
+        </div>
+      </label>
+      <span class="lancamento-valor negativo">${formatMoney(conta.valor)}</span>
+      <button type="button" class="btn-icon cp-pular-btn" data-conta-id="${conta.id}" data-data="${data}" aria-label="Pular esta ocorrência" title="Pular esta ocorrência">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </li>
+  `).join('');
+
+  cpContasListEl.innerHTML = contas.map((conta) => `
+    <li class="lancamento-item">
+      <div class="lancamento-info">
+        <span class="lancamento-desc">${conta.nome} — dia ${conta.dia_vencimento}</span>
+        <span class="lancamento-data">${conta.data_fim ? `até ${formatDataBR(conta.data_fim)}` : 'sem fim'}</span>
+      </div>
+      <span class="lancamento-valor negativo">${formatMoney(conta.valor)}</span>
+      <button type="button" class="btn-icon cp-remover-btn" data-conta-id="${conta.id}" aria-label="Remover conta" title="Remover conta">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+      </button>
+    </li>
+  `).join('');
+}
+
+cpListEl.addEventListener('change', async (e) => {
+  if (!e.target.classList.contains('cp-pago-checkbox')) return;
+  const contaId = e.target.dataset.contaId;
+  const data = e.target.dataset.data;
+
+  if (e.target.checked) {
+    await supabase.from(CP_PAGAMENTOS_TABLE).insert({ conta_id: contaId, data });
+  } else {
+    await supabase.from(CP_PAGAMENTOS_TABLE).delete().eq('conta_id', contaId).eq('data', data);
+  }
+  await carregarContasPagar();
+});
+
+cpListEl.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.cp-pular-btn');
+  if (!btn) return;
+  await supabase.from(CP_EXDATES_TABLE).insert({ conta_id: btn.dataset.contaId, data: btn.dataset.data });
+  await carregarContasPagar();
+});
+
+cpContasListEl.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.cp-remover-btn');
+  if (!btn) return;
+  if (!confirm('Remover esta conta e todo o seu histórico de pagamentos/exceções?')) return;
+  await supabase.from(CP_TABLE).delete().eq('id', btn.dataset.contaId);
+  await carregarContasPagar();
+});
+
+cpForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  cpErrorEl.hidden = true;
+
+  const nome = cpNomeInput.value.trim();
+  const valor = parseMoney(cpValorInput.value);
+  const dia = Number(cpDiaInput.value);
+  const dataInicio = cpDataInicioInput.value;
+  const fimTipo = document.querySelector('input[name="cp-fim-tipo"]:checked').value;
+  const dataFim = fimTipo === 'data' ? cpDataFimInput.value : null;
+
+  if (!valor || valor <= 0) {
+    cpErrorEl.textContent = 'Informe um valor válido.';
+    cpErrorEl.hidden = false;
+    return;
+  }
+
+  if (!dia || dia < 1 || dia > 31) {
+    cpErrorEl.textContent = 'Informe um dia de vencimento entre 1 e 31.';
+    cpErrorEl.hidden = false;
+    return;
+  }
+
+  if (fimTipo === 'data' && !dataFim) {
+    cpErrorEl.textContent = 'Informe a data de fim ou escolha "Sem fim".';
+    cpErrorEl.hidden = false;
+    return;
+  }
+
+  const { error } = await supabase.from(CP_TABLE).insert({
+    nome,
+    valor,
+    dia_vencimento: dia,
+    data_inicio: dataInicio,
+    data_fim: dataFim,
+  });
+
+  if (error) {
+    cpErrorEl.textContent = 'Erro ao salvar. Tente novamente.';
+    cpErrorEl.hidden = false;
+    return;
+  }
+
+  cpForm.reset();
+  cpDataInicioInput.value = hojeISO();
+  cpDataFimInput.hidden = true;
+  await carregarContasPagar();
 });
 
 // ===================== INIT =====================
