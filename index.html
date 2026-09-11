@@ -177,8 +177,8 @@
       <h2 class="panel-title">Contas a Pagar</h2>
 
       <section class="balance-box">
-        <span class="balance-label">Total previsto no mês</span>
-        <span id="cp-total-mes" class="balance-value">R$ 0,00</span>
+        <span class="balance-label">Total a pagar no mês</span>
+        <span id="cp-total-mes" class="balance-value">R$ 0,00 <span class="balance-value-total">de R$ 0,00</span></span>
       </section>
 
       <div class="switch-toggle">
@@ -225,6 +225,11 @@
         <details class="list" open>
           <summary>Próximas ocorrências</summary>
           <ul id="cp-list" class="lancamentos"></ul>
+        </details>
+
+        <details class="list">
+          <summary>Pagos</summary>
+          <ul id="cp-pagos-list" class="lancamentos"></ul>
         </details>
 
         <details class="list">

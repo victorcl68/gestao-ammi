@@ -267,6 +267,12 @@ button[type="submit"]:disabled {
   margin-top: 4px;
 }
 
+.balance-value-total {
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
 .balance-value.negative {
   color: var(--danger);
 }

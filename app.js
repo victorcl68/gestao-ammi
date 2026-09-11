@@ -511,6 +511,7 @@ bloquearDuranteSubmit(salPagamentoForm, async (e) => {
 
 const cpTotalMesEl = document.getElementById('cp-total-mes');
 const cpListEl = document.getElementById('cp-list');
+const cpPagosListEl = document.getElementById('cp-pagos-list');
 const cpContasListEl = document.getElementById('cp-contas-list');
 const cpForm = document.getElementById('cp-form');
 const cpErrorEl = document.getElementById('cp-form-error');
@@ -667,15 +668,18 @@ async function carregarContasPagar() {
 
   if (contas.length === 0) {
     cpListEl.innerHTML = `<li class="empty-state">Nenhuma conta cadastrada.</li>`;
+    cpPagosListEl.innerHTML = `<li class="empty-state">Nenhum pagamento ainda.</li>`;
     cpContasListEl.innerHTML = `<li class="empty-state">Nenhuma conta cadastrada.</li>`;
-    cpTotalMesEl.textContent = formatMoney(0);
+    cpTotalMesEl.innerHTML = `${formatMoney(0)} <span class="balance-value-total">de ${formatMoney(0)}</span>`;
     return;
   }
 
   const hoje = hojeISO();
   const mesAtual = hoje.slice(0, 7);
-  let totalMes = 0;
+  let totalMesPago = 0;
+  let totalMesNaoPago = 0;
   const ocorrenciasParaExibir = [];
+  const ocorrenciasPagas = [];
 
   contas.forEach((conta) => {
     let ocorrencias;
@@ -698,15 +702,22 @@ async function carregarContasPagar() {
     ocorrencias.forEach(({ data, valor }) => {
       const paga = pagosSet.has(`${conta.id}|${data}`);
       const atrasada = data < hoje && !paga;
-      if (data.slice(0, 7) === mesAtual && !paga) {
-        totalMes += valor;
+      if (data.slice(0, 7) === mesAtual) {
+        if (paga) totalMesPago += valor;
+        else totalMesNaoPago += valor;
       }
-      ocorrenciasParaExibir.push({ conta, data, valor, paga, atrasada });
+      if (paga) {
+        ocorrenciasPagas.push({ conta, data, valor, paga, atrasada });
+      } else {
+        ocorrenciasParaExibir.push({ conta, data, valor, paga, atrasada });
+      }
     });
   });
 
   ocorrenciasParaExibir.sort((a, b) => a.data.localeCompare(b.data));
-  cpTotalMesEl.textContent = formatMoney(totalMes);
+  ocorrenciasPagas.sort((a, b) => b.data.localeCompare(a.data));
+  const totalMesGeral = totalMesPago + totalMesNaoPago;
+  cpTotalMesEl.innerHTML = `${formatMoney(totalMesNaoPago)} <span class="balance-value-total">de ${formatMoney(totalMesGeral)}</span>`;
 
   const gruposSemana = agruparPorSemana(ocorrenciasParaExibir);
   const [anoHoje, mesHoje] = hoje.split('-').map(Number);
@@ -756,6 +767,21 @@ async function carregarContasPagar() {
     `;
   }).join('');
 
+  cpPagosListEl.innerHTML = ocorrenciasPagas.length === 0
+    ? `<li class="empty-state">Nenhum pagamento ainda.</li>`
+    : ocorrenciasPagas.map(({ conta, data, valor }) => `
+      <li class="lancamento-item">
+        <label class="lancamento-checkbox">
+          <input type="checkbox" data-conta-id="${conta.id}" data-data="${data}" class="cp-pago-checkbox" checked>
+          <div class="lancamento-info">
+            <span class="lancamento-desc">${conta.descricao}</span>
+            <span class="lancamento-data">${formatDataBR(data)}</span>
+          </div>
+        </label>
+        <span class="lancamento-valor negativo">${formatMoney(valor)}</span>
+      </li>
+    `).join('');
+
   cpContasListEl.innerHTML = contas.map((conta) => {
     const valorExibido = conta.tipo === 'parcelado'
       ? parcelasRows.filter((p) => p.conta_id === conta.id).reduce((acc, p) => acc + Number(p.valor), 0)
@@ -779,7 +805,7 @@ async function carregarContasPagar() {
   }).join('');
 }
 
-cpListEl.addEventListener('change', async (e) => {
+async function alternarPagoContasPagar(e) {
   if (!e.target.classList.contains('cp-pago-checkbox')) return;
   const contaId = e.target.dataset.contaId;
   const data = e.target.dataset.data;
@@ -790,7 +816,10 @@ cpListEl.addEventListener('change', async (e) => {
     await supabase.from(CP_PAGAMENTOS_TABLE).delete().eq('conta_id', contaId).eq('data', data);
   }
   await carregarContasPagar();
-});
+}
+
+cpListEl.addEventListener('change', alternarPagoContasPagar);
+cpPagosListEl.addEventListener('change', alternarPagoContasPagar);
 
 cpListEl.addEventListener('click', async (e) => {
   const pularBtn = e.target.closest('.cp-pular-btn');

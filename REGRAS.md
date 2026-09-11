@@ -5,7 +5,7 @@ Não trata de stack, setup ou como rodar — só do que o sistema faz e por quê
 O objetivo é que essas regras não se percam com o tempo, já que boa parte
 delas não é óbvia lendo o código e nenhuma está registrada em outro lugar.
 
-Última revisão: 2026-09-11.
+Última revisão: 2026-09-12.
 
 ---
 
@@ -21,7 +21,7 @@ delas não é óbvia lendo o código e nenhuma está registrada em outro lugar.
   - [Pular ocorrência](#pular-ocorrência)
   - [Ajuste de valor](#ajuste-de-valor)
   - [Atrasadas](#atrasadas)
-  - [Total previsto no mês](#total-previsto-no-mês)
+  - [Total a pagar no mês](#total-a-pagar-no-mês)
   - [Agrupamento por semana](#agrupamento-por-semana)
 - [Regras transversais](#regras-transversais)
 - [Comportamentos conhecidos e limitações](#comportamentos-conhecidos-e-limitações)
@@ -239,9 +239,9 @@ A lista mostra, por conta:
 O limite de 3 é sobre as futuras, não sobre o total. Uma conta com 5 meses
 de atraso mostra 5 atrasadas + 3 futuras = 8 linhas.
 
-Uma ocorrência já paga **continua aparecendo** (com o checkbox marcado) e
-ocupa uma das 3 vagas de futuras. Isso é intencional: permite desmarcar um
-pagamento feito por engano.
+Uma ocorrência já paga entra nesse cálculo (**ocupa uma das 3 vagas de
+futuras**), mas não fica misturada na lista principal — ela é movida para
+a seção "Pagos" (ver [Pagamento de ocorrências](#pagamento-de-ocorrências)).
 
 ---
 
@@ -299,6 +299,23 @@ ocorrência volta a contar como pendente.
 Não há registro de valor pago nem de data de pagamento — apenas o fato
 booleano de que aquela ocorrência foi paga.
 
+#### Seção "Pagos"
+
+Ocorrências pagas não ficam misturadas nos blocos de semana: são movidas
+para uma seção separada, recolhida por padrão (`<details>` fechado), no fim
+da lista. O checkbox continua ali, então desmarcar um pagamento feito por
+engano é só abrir a seção e desmarcar — a ocorrência volta para a lista
+principal automaticamente.
+
+Dentro da seção "Pagos", os itens vêm ordenados do mais recente para o mais
+antigo (ordem inversa da lista principal). Não há botões de editar valor
+nem de pular numa ocorrência já paga.
+
+Como essa seção só existe para as ocorrências que estão dentro da janela
+de cálculo (atrasadas + as 3 próximas futuras — ver acima), uma conta
+mensal com anos de pagamentos **não acumula todo o histórico ali**: só
+aparecem os pagamentos que caem dentro dessa janela.
+
 ---
 
 ### Pular ocorrência
@@ -353,20 +370,27 @@ proposital: uma conta vencida não some da vista sozinha.
 
 ---
 
-### Total previsto no mês
+### Total a pagar no mês
 
-Exibido no topo do módulo. Soma o valor das ocorrências que:
+Exibido no topo do módulo, no formato `R$ X de R$ Y`:
 
-- Caem no **mês corrente** (comparação por `AAAA-MM`), **e**
-- **Não** estão marcadas como pagas
+```
+X = soma das ocorrências do mês corrente que NÃO estão pagas
+Y = X + soma das ocorrências do mês corrente que ESTÃO pagas
+```
+
+Ou seja: **X é quanto ainda falta pagar**, **Y é o custo total do mês**
+(pago + pendente). Y nunca é menor que X.
 
 Implicações que não são óbvias:
 
-- **Ocorrências pagas saem do total.** O número representa quanto ainda
-  falta pagar neste mês, não quanto o mês custa no total.
-- **Atrasadas de meses anteriores não entram**, mesmo aparecendo na lista.
-  O total é estritamente do mês corrente.
-- Usa o valor efetivo (com ajuste aplicado, se houver).
+- **Atrasadas de meses anteriores não entram em nenhum dos dois números**,
+  mesmo aparecendo na lista principal. O cálculo é estritamente do mês
+  corrente (comparação por `AAAA-MM`).
+- Usa o valor efetivo de cada ocorrência (com ajuste aplicado, se houver).
+- Uma conta paga logo no início do mês some do "X" mas continua contando
+  para o "Y" — o card mostra o esforço que falta, não some com o que já
+  foi resolvido.
 
 ---
 
