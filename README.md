@@ -4,7 +4,7 @@ Site simples (HTML/CSS/JS puro, sem build, mobile-first) para controles financei
 
 - **Caixa Casa** — dinheiro retirado do caixa e guardado em casa (entradas e saídas).
 - **Salário** — comissão de 25% sobre a venda do dia, mais pagamentos (retiradas).
-- **Contas a Pagar** — contas recorrentes mensais (com ou sem data de fim), com exceções pontuais e controle de pagamento por ocorrência.
+- **Contas a Pagar** — contas mensais (repete todo mês no mesmo dia, sem fim) ou parceladas (quantidade fixa de parcelas com datas escolhidas manualmente), com exceções pontuais e controle de pagamento por ocorrência.
 
 Em telas largas (desktop), as três seções aparecem lado a lado na mesma página. Em celular, cada uma é uma tela separada acessada por um menu inicial.
 
@@ -30,7 +30,7 @@ Depois abra o endereço indicado no navegador. Abrir o `index.html` direto como 
 1. Crie um projeto gratuito em [supabase.com](https://supabase.com).
 2. Abra o **SQL Editor** do projeto e rode, em ordem, os arquivos da pasta [migrations/](migrations) — cada um cria suas tabelas, índices e políticas de Row Level Security (RLS):
    - [001_caixa_casa_e_salario.sql](migrations/001_caixa_casa_e_salario.sql) — tabelas `caixa_casa_lancamentos` e `salario_lancamentos`.
-   - [002_contas_pagar.sql](migrations/002_contas_pagar.sql) — tabelas `contas_pagar`, `contas_pagar_exdates` e `contas_pagar_pagamentos`.
+   - [002_contas_pagar.sql](migrations/002_contas_pagar.sql) — tabelas `contas_pagar`, `contas_pagar_exdates`, `contas_pagar_parcelas` e `contas_pagar_pagamentos`.
 3. Em **Authentication → Providers → Email**, desative **"Allow new users to sign up"**. Isso é importante: sem essa etapa, qualquer pessoa que abrir o site poderia criar a própria conta e logar.
 4. Em **Authentication → Users**, crie manualmente o(s) usuário(s) que vão acessar o painel (e-mail + senha). Todos os usuários autenticados enxergam e lançam os mesmos dados — não há separação por usuário.
 5. Em **Project Settings → API Keys**, copie a **Project URL** e a chave pública (**anon key** ou, em projetos mais novos, **Publishable key** — formato `sb_publishable_...`).
@@ -63,4 +63,4 @@ migrations/   - scripts SQL do Supabase, em ordem de aplicação
 ## Próximos passos (fora do escopo atual)
 
 - Um novo módulo pode seguir o mesmo padrão: uma nova migration em `migrations/` e uma nova seção na tela, sem alterar o que já existe.
-- Contas a Pagar hoje só suporta recorrência mensal (dia fixo do mês). Outras frequências (semanal, anual) ficam para quando/se forem necessárias.
+- Contas a Pagar hoje só suporta recorrência mensal (dia fixo do mês) no modo Mensal. Outras frequências (semanal, anual) ficam para quando/se forem necessárias.
