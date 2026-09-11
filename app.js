@@ -82,41 +82,24 @@ function formatDataBR(isoDate) {
   return `${day}/${month}/${year}`;
 }
 
-// Quantos dias antes do dia 1 do mês a semana (segunda-feira) já tinha
-// começado. Ex: se o mês começa numa quarta, offset = 2 (a segunda foi
-// 2 dias antes do dia 1).
-function offsetAteSegunda(ano, mes) {
-  const diaSemanaPrimeiroDia = new Date(ano, mes - 1, 1).getDay(); // 0=domingo..6=sábado
-  return (diaSemanaPrimeiroDia + 6) % 7;
+// Quantos dias antes do dia 1 do mês a semana (domingo) já tinha começado.
+// Ex: se o mês começa numa terça, offset = 2 (o domingo foi 2 dias antes
+// do dia 1).
+function offsetAteDomingo(ano, mes) {
+  return new Date(ano, mes - 1, 1).getDay(); // 0=domingo..6=sábado
 }
 
 // Índice da semana (1-based) dentro do mês da própria data, com semanas de
-// calendário real começando na segunda-feira. A "semana 1" pode ter menos
-// de 7 dias se o mês não começar numa segunda.
+// calendário real começando no domingo. A "semana 1" pode ter menos de 7
+// dias se o mês não começar num domingo.
 function semanaDoMes(isoDate) {
   const [ano, mes, dia] = isoDate.split('-').map(Number);
-  return Math.ceil((dia + offsetAteSegunda(ano, mes)) / 7);
+  return Math.ceil((dia + offsetAteDomingo(ano, mes)) / 7);
 }
 
-function ultimoDiaDoMesISO(ano, mes) {
-  return new Date(ano, mes, 0).getDate();
-}
-
-// Último dia do mês (número) que ainda pertence à semana `semana` daquele
-// mês/ano — usado pra saber quantos dias do mês essa semana realmente cobre.
-function ultimoDiaDoMesNaSemana(ano, mes, semana) {
-  const fimTeoricoDaSemana = semana * 7 - offsetAteSegunda(ano, mes);
-  return Math.min(fimTeoricoDaSemana, ultimoDiaDoMesISO(ano, mes));
-}
-
-function primeiroDiaDoMesNaSemana(ano, mes, semana) {
-  const inicioTeoricoDaSemana = (semana - 1) * 7 - offsetAteSegunda(ano, mes) + 1;
-  return Math.max(inicioTeoricoDaSemana, 1);
-}
-
-// Agrupa ocorrências (já ordenadas por data) em blocos "Mês / Semana N",
-// fundindo a última semana de um mês com a penúltima quando ela tiver 3
-// dias ou menos daquele mês (evita um bloco final minúsculo/solto).
+// Agrupa ocorrências (já ordenadas por data) em blocos "Mês / Semana N".
+// Cada mês fecha suas próprias semanas — a última pode ter poucos dias
+// (ex: só 1-3 dias), e ainda assim aparece como bloco próprio.
 function agruparPorSemana(ocorrencias) {
   const grupos = [];
   const chaveGrupo = (ano, mes, semana) => `${ano}-${mes}-${semana}`;
@@ -134,26 +117,6 @@ function agruparPorSemana(ocorrencias) {
     }
     porChave.get(chave).itens.push(oc);
   });
-
-  // Funde a última semana de cada mês com a penúltima se tiver ≤3 dias do mês.
-  for (let i = grupos.length - 1; i >= 0; i--) {
-    const grupo = grupos[i];
-    const anterior = grupos[i - 1];
-    const ehUltimaSemanaDoMes = !grupos[i + 1] || grupos[i + 1].mes !== grupo.mes || grupos[i + 1].ano !== grupo.ano;
-    const mesmoMesQueAnterior = anterior && anterior.mes === grupo.mes && anterior.ano === grupo.ano;
-
-    if (ehUltimaSemanaDoMes && mesmoMesQueAnterior) {
-      const inicio = primeiroDiaDoMesNaSemana(grupo.ano, grupo.mes, grupo.semana);
-      const fim = ultimoDiaDoMesNaSemana(grupo.ano, grupo.mes, grupo.semana);
-      const diasDoMesNaSemana = fim - inicio + 1;
-
-      if (diasDoMesNaSemana <= 3) {
-        anterior.itens.push(...grupo.itens);
-        anterior.semanaFundida = true;
-        grupos.splice(i, 1);
-      }
-    }
-  }
 
   return grupos;
 }
@@ -715,9 +678,7 @@ async function carregarContasPagar() {
   const semanaHoje = semanaDoMes(hoje);
 
   function ehGrupoDaSemanaAtual(grupo) {
-    const semanaAnteriorFundida = grupo.semanaFundida ? grupo.semana - 1 : grupo.semana;
-    return grupo.ano === anoHoje && grupo.mes === mesHoje
-      && semanaHoje >= semanaAnteriorFundida && semanaHoje <= grupo.semana;
+    return grupo.ano === anoHoje && grupo.mes === mesHoje && grupo.semana === semanaHoje;
   }
 
   function renderizarItemOcorrencia({ conta, data, valor, paga, atrasada }) {
@@ -753,9 +714,7 @@ async function carregarContasPagar() {
     return grupos.map((grupo) => {
       const ehSemanaAtual = ehGrupoDaSemanaAtual(grupo);
       const itensHtml = grupo.itens.map(renderizarItemOcorrencia).join('');
-      const rotuloSemana = grupo.semanaFundida
-        ? `Semana ${grupo.semana - 1}-${grupo.semana}`
-        : `Semana ${grupo.semana}`;
+      const rotuloSemana = `Semana ${grupo.semana}`;
       const totalGrupo = grupo.itens.reduce((acc, item) => acc + item.valor, 0);
 
       return `

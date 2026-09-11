@@ -5,7 +5,7 @@ Não trata de stack, setup ou como rodar — só do que o sistema faz e por quê
 O objetivo é que essas regras não se percam com o tempo, já que boa parte
 delas não é óbvia lendo o código e nenhuma está registrada em outro lugar.
 
-Última revisão: 2026-09-13.
+Última revisão: 2026-09-13 (atualização).
 
 ---
 
@@ -389,40 +389,32 @@ A lista de ocorrências é dividida em blocos com cabeçalho `Mês — Semana N`
 
 #### Definição de semana
 
-Semana de **calendário real, começando na segunda-feira** (não blocos fixos
-de 7 dias a partir do dia 1).
+Semana de **calendário real, começando no domingo** (não blocos fixos de 7
+dias a partir do dia 1).
 
 Consequência: a Semana 1 pode ter menos de 7 dias. Se o mês começa numa
-quarta, a Semana 1 tem 5 dias (quarta a domingo), porque a segunda daquela
+terça, a Semana 1 tem 5 dias (terça a sábado), porque o domingo daquela
 semana ficou no mês anterior.
 
 #### Agrupamento é por mês da data
 
 Uma semana que atravessa a virada do mês é **cortada**: uma ocorrência em
 30/09 fica na última semana de *setembro*, mesmo que essa semana continue
-até 04/10. Cada mês fecha suas próprias semanas.
+até 03/10. Cada mês fecha suas próprias semanas.
 
-Isso evita que um bloco misture datas de dois meses diferentes.
-
-#### Fusão da última semana
-
-Quando a última semana de um mês contém **3 dias ou menos** daquele mês, ela
-não vira um bloco próprio: seus itens são absorvidos pela semana anterior, e
-o cabeçalho passa a indicar o intervalo (`Semana 4-5`).
-
-O motivo é a "5ª semana minúscula": um mês de 30 dias que começa numa terça
-tem uma semana 5 com apenas os dias 28, 29 e 30. Como bloco isolado, isso
-polui a lista com um grupo quase vazio.
-
-O limite de 3 dias é arbitrário, escolhido por equilíbrio: semanas com 4+
-dias já têm conteúdo suficiente para justificar um bloco próprio.
+Isso evita que um bloco misture datas de dois meses diferentes. Como
+consequência, a última semana de um mês pode ter poucos dias (às vezes só
+1) — e ainda assim **sempre aparece como bloco próprio**, sem fundir com a
+semana anterior. A antiga regra de fusão (que juntava a última semana com
+a penúltima quando tinha 3 dias ou menos) foi removida por decisão do
+usuário: prefere ver a semana curta separada a arriscar perder alguma
+ocorrência de vista dentro de um bloco maior.
 
 #### Destaque da semana atual
 
 O cabeçalho da semana que contém a data de hoje ganha uma cor de destaque e
 um pontinho ao lado — discreto, mas suficiente para localizar rapidamente
-"onde estou" na lista. Um bloco fundido (`Semana 4-5`) é considerado atual
-se hoje cair em qualquer uma das duas semanas que o compõem.
+"onde estou" na lista.
 
 #### Total por semana
 
