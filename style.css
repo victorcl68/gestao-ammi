@@ -90,6 +90,10 @@ body {
   opacity: 0.75;
 }
 
+.btn-icon-neutro {
+  color: var(--text-muted);
+}
+
 .card {
   background: var(--card-bg);
   border-radius: var(--radius);

@@ -13,6 +13,7 @@ const CP_TABLE = 'contas_pagar';
 const CP_EXDATES_TABLE = 'contas_pagar_exdates';
 const CP_PARCELAS_TABLE = 'contas_pagar_parcelas';
 const CP_PAGAMENTOS_TABLE = 'contas_pagar_pagamentos';
+const CP_AJUSTES_TABLE = 'contas_pagar_ajustes';
 const PERCENTUAL_COMISSAO = 0.25;
 
 // ===================== HELPERS: dinheiro / data =====================
@@ -550,18 +551,22 @@ async function carregarContasPagar() {
     { data: exdatesRows, error: errEx },
     { data: parcelasRows, error: errParc },
     { data: pagos, error: errPag },
+    { data: ajustesRows, error: errAjustes },
   ] = await Promise.all([
     supabase.from(CP_TABLE).select('*').order('data_inicio', { ascending: true }),
     supabase.from(CP_EXDATES_TABLE).select('*'),
     supabase.from(CP_PARCELAS_TABLE).select('*'),
     supabase.from(CP_PAGAMENTOS_TABLE).select('*'),
+    supabase.from(CP_AJUSTES_TABLE).select('*'),
   ]);
 
-  if (errContas || errEx || errParc || errPag) {
+  if (errContas || errEx || errParc || errPag || errAjustes) {
     cpListEl.innerHTML = `<li class="empty-state">Erro ao carregar contas a pagar.</li>`;
     cpContasListEl.innerHTML = '';
     return;
   }
+
+  const ajustesMap = new Map(ajustesRows.map((a) => [`${a.conta_id}|${a.data}`, Number(a.valor)]));
 
   const pagosSet = new Set(pagos.map((p) => `${p.conta_id}|${p.data}`));
 
@@ -589,7 +594,10 @@ async function carregarContasPagar() {
         exdatesRows.filter((e) => e.conta_id === conta.id).map((e) => e.data)
       );
       ocorrencias = gerarOcorrenciasRecorrenteParaExibir(conta, exdatesDaConta, pagosSet, 3)
-        .map((data) => ({ data, valor: Number(conta.valor) }));
+        .map((data) => ({
+          data,
+          valor: ajustesMap.get(`${conta.id}|${data}`) ?? Number(conta.valor),
+        }));
     }
 
     ocorrencias.forEach(({ data, valor }) => {
@@ -615,6 +623,12 @@ async function carregarContasPagar() {
         </div>
       </label>
       <span class="lancamento-valor negativo">${formatMoney(valor)}</span>
+      <button type="button" class="btn-icon btn-icon-neutro cp-editar-btn" data-conta-id="${conta.id}" data-data="${data}" data-tipo="${conta.tipo}" data-valor="${valor}" aria-label="Editar valor" title="Editar valor">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+          <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+        </svg>
+      </button>
       <button type="button" class="btn-icon cp-pular-btn" data-conta-id="${conta.id}" data-data="${data}" data-tipo="${conta.tipo}" aria-label="Pular esta ocorrência" title="Pular esta ocorrência">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -661,15 +675,36 @@ cpListEl.addEventListener('change', async (e) => {
 });
 
 cpListEl.addEventListener('click', async (e) => {
-  const btn = e.target.closest('.cp-pular-btn');
-  if (!btn) return;
-
-  if (btn.dataset.tipo === 'parcelado') {
-    await supabase.from(CP_PARCELAS_TABLE).delete().eq('conta_id', btn.dataset.contaId).eq('data', btn.dataset.data);
-  } else {
-    await supabase.from(CP_EXDATES_TABLE).insert({ conta_id: btn.dataset.contaId, data: btn.dataset.data });
+  const pularBtn = e.target.closest('.cp-pular-btn');
+  if (pularBtn) {
+    if (pularBtn.dataset.tipo === 'parcelado') {
+      await supabase.from(CP_PARCELAS_TABLE).delete().eq('conta_id', pularBtn.dataset.contaId).eq('data', pularBtn.dataset.data);
+    } else {
+      await supabase.from(CP_EXDATES_TABLE).insert({ conta_id: pularBtn.dataset.contaId, data: pularBtn.dataset.data });
+    }
+    await carregarContasPagar();
+    return;
   }
-  await carregarContasPagar();
+
+  const editarBtn = e.target.closest('.cp-editar-btn');
+  if (editarBtn) {
+    const { contaId, data, tipo, valor } = editarBtn.dataset;
+    const novoValorTexto = prompt('Novo valor:', valor.replace('.', ','));
+    if (novoValorTexto === null) return;
+
+    const novoValor = parseMoney(novoValorTexto);
+    if (!novoValor || novoValor <= 0) {
+      alert('Valor inválido.');
+      return;
+    }
+
+    if (tipo === 'parcelado') {
+      await supabase.from(CP_PARCELAS_TABLE).update({ valor: novoValor }).eq('conta_id', contaId).eq('data', data);
+    } else {
+      await supabase.from(CP_AJUSTES_TABLE).upsert({ conta_id: contaId, data, valor: novoValor });
+    }
+    await carregarContasPagar();
+  }
 });
 
 cpContasListEl.addEventListener('click', async (e) => {
