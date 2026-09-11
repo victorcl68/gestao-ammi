@@ -425,6 +425,7 @@ const cpCampoDataUnicaEl = document.getElementById('cp-campo-data-unica');
 const cpCampoParcelasEl = document.getElementById('cp-campo-parcelas');
 const cpQtdeParcelasInput = document.getElementById('cp-qtde-parcelas');
 const cpDatasParcelasEl = document.getElementById('cp-datas-parcelas');
+const cpValorModoEl = document.getElementById('cp-valor-modo');
 aplicarMascaraMoney(cpValorInput);
 
 document.querySelectorAll('input[name="cp-tipo"]').forEach((el) => {
@@ -433,6 +434,7 @@ document.querySelectorAll('input[name="cp-tipo"]').forEach((el) => {
     cpCampoDataUnicaEl.hidden = parcelado;
     cpCampoParcelasEl.hidden = !parcelado;
     cpDataInicioInput.required = !parcelado;
+    cpValorModoEl.hidden = !parcelado;
   });
 });
 
@@ -456,6 +458,21 @@ cpQtdeParcelasInput.addEventListener('input', () => {
     cpDatasParcelasEl.appendChild(wrapper);
   }
 });
+
+// "repetir": valor digitado se repete em cada parcela.
+// "dividir": valor digitado é o total, dividido em partes iguais — o
+// resto de centavos (por arredondamento) vai pra última parcela, pra
+// soma bater exatamente com o total.
+function calcularValoresParcelas(valor, qtde, modo) {
+  if (modo === 'repetir') {
+    return new Array(qtde).fill(round2(valor));
+  }
+
+  const partes = new Array(qtde).fill(round2(Math.floor((valor / qtde) * 100) / 100));
+  const somaParcial = round2(partes.reduce((acc, v) => acc + v, 0));
+  partes[qtde - 1] = round2(partes[qtde - 1] + (valor - somaParcial));
+  return partes;
+}
 
 // Último dia válido do mês/ano para um dia_vencimento que pode não existir
 // em todo mês (ex: dia 31 em abril vira 30).
@@ -566,28 +583,29 @@ async function carregarContasPagar() {
     if (conta.tipo === 'parcelado') {
       ocorrencias = parcelasRows
         .filter((p) => p.conta_id === conta.id)
-        .map((p) => p.data);
+        .map((p) => ({ data: p.data, valor: Number(p.valor) }));
     } else {
       const exdatesDaConta = new Set(
         exdatesRows.filter((e) => e.conta_id === conta.id).map((e) => e.data)
       );
-      ocorrencias = gerarOcorrenciasRecorrenteParaExibir(conta, exdatesDaConta, pagosSet, 3);
+      ocorrencias = gerarOcorrenciasRecorrenteParaExibir(conta, exdatesDaConta, pagosSet, 3)
+        .map((data) => ({ data, valor: Number(conta.valor) }));
     }
 
-    ocorrencias.forEach((data) => {
+    ocorrencias.forEach(({ data, valor }) => {
       const paga = pagosSet.has(`${conta.id}|${data}`);
       const atrasada = data < hoje && !paga;
       if (data.slice(0, 7) === mesAtual && !paga) {
-        totalMes += Number(conta.valor);
+        totalMes += valor;
       }
-      ocorrenciasParaExibir.push({ conta, data, paga, atrasada });
+      ocorrenciasParaExibir.push({ conta, data, valor, paga, atrasada });
     });
   });
 
   ocorrenciasParaExibir.sort((a, b) => a.data.localeCompare(b.data));
   cpTotalMesEl.textContent = formatMoney(totalMes);
 
-  cpListEl.innerHTML = ocorrenciasParaExibir.map(({ conta, data, paga, atrasada }) => `
+  cpListEl.innerHTML = ocorrenciasParaExibir.map(({ conta, data, valor, paga, atrasada }) => `
     <li class="lancamento-item${atrasada ? ' lancamento-atrasada' : ''}">
       <label class="lancamento-checkbox">
         <input type="checkbox" data-conta-id="${conta.id}" data-data="${data}" class="cp-pago-checkbox" ${paga ? 'checked' : ''}>
@@ -596,7 +614,7 @@ async function carregarContasPagar() {
           <span class="lancamento-data">${formatDataBR(data)}</span>
         </div>
       </label>
-      <span class="lancamento-valor negativo">${formatMoney(conta.valor)}</span>
+      <span class="lancamento-valor negativo">${formatMoney(valor)}</span>
       <button type="button" class="btn-icon cp-pular-btn" data-conta-id="${conta.id}" data-data="${data}" data-tipo="${conta.tipo}" aria-label="Pular esta ocorrência" title="Pular esta ocorrência">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -606,13 +624,18 @@ async function carregarContasPagar() {
     </li>
   `).join('');
 
-  cpContasListEl.innerHTML = contas.map((conta) => `
+  cpContasListEl.innerHTML = contas.map((conta) => {
+    const valorExibido = conta.tipo === 'parcelado'
+      ? parcelasRows.filter((p) => p.conta_id === conta.id).reduce((acc, p) => acc + Number(p.valor), 0)
+      : Number(conta.valor);
+
+    return `
     <li class="lancamento-item">
       <div class="lancamento-info">
         <span class="lancamento-desc">${conta.descricao}</span>
         <span class="lancamento-data">${conta.tipo === 'parcelado' ? 'parcelado' : `mensal — dia ${conta.dia_vencimento}`}</span>
       </div>
-      <span class="lancamento-valor negativo">${formatMoney(conta.valor)}</span>
+      <span class="lancamento-valor negativo">${formatMoney(valorExibido)}</span>
       <button type="button" class="btn-icon cp-remover-btn" data-conta-id="${conta.id}" aria-label="Remover conta" title="Remover conta">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="3 6 5 6 21 6"></polyline>
@@ -620,7 +643,8 @@ async function carregarContasPagar() {
         </svg>
       </button>
     </li>
-  `).join('');
+  `;
+  }).join('');
 }
 
 cpListEl.addEventListener('change', async (e) => {
@@ -701,11 +725,12 @@ cpForm.addEventListener('submit', async (e) => {
       return;
     }
 
+    const modoValor = document.querySelector('input[name="cp-valor-modo"]:checked').value;
+    const valoresParcelas = calcularValoresParcelas(valor, datasParcelas.length, modoValor);
     const dataInicio = [...datasParcelas].sort()[0];
 
     const { data: contaCriada, error } = await supabase.from(CP_TABLE).insert({
       descricao,
-      valor,
       tipo: 'parcelado',
       data_inicio: dataInicio,
     }).select().single();
@@ -717,7 +742,7 @@ cpForm.addEventListener('submit', async (e) => {
     }
 
     const { error: errParcelas } = await supabase.from(CP_PARCELAS_TABLE).insert(
-      datasParcelas.map((data) => ({ conta_id: contaCriada.id, data }))
+      datasParcelas.map((data, i) => ({ conta_id: contaCriada.id, data, valor: valoresParcelas[i] }))
     );
 
     if (errParcelas) {
@@ -731,6 +756,7 @@ cpForm.addEventListener('submit', async (e) => {
   cpDataInicioInput.value = hojeISO();
   cpCampoDataUnicaEl.hidden = false;
   cpCampoParcelasEl.hidden = true;
+  cpValorModoEl.hidden = true;
   cpDatasParcelasEl.innerHTML = '';
   await carregarContasPagar();
 });

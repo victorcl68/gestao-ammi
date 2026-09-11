@@ -190,7 +190,16 @@
       </div>
 
       <form id="cp-form" class="card">
-        <label for="cp-valor">Valor</label>
+        <div class="label-com-switch">
+          <label for="cp-valor">Valor</label>
+          <div id="cp-valor-modo" class="switch-toggle switch-toggle-mini" hidden>
+            <input type="radio" name="cp-valor-modo" id="cp-valor-modo-repetir" value="repetir" checked>
+            <label for="cp-valor-modo-repetir">Repetir</label>
+            <input type="radio" name="cp-valor-modo" id="cp-valor-modo-dividir" value="dividir">
+            <label for="cp-valor-modo-dividir">Dividir</label>
+            <span class="switch-thumb"></span>
+          </div>
+        </div>
         <input type="text" id="cp-valor" inputmode="decimal" placeholder="0,00" required>
 
         <div id="cp-campo-data-unica">

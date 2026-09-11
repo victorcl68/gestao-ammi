@@ -322,6 +322,28 @@ button[type="submit"]:active {
   color: var(--primary-text);
 }
 
+.label-com-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 14px 0 4px;
+}
+
+.label-com-switch label {
+  margin: 0;
+}
+
+.switch-toggle-mini {
+  padding: 2px;
+  margin-bottom: 0;
+}
+
+.switch-toggle-mini label {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
 /* Tab panels sobrepostos: altura travada no maior dos dois */
 .tab-panels {
   display: grid;
