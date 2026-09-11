@@ -419,14 +419,9 @@ const cpForm = document.getElementById('cp-form');
 const cpErrorEl = document.getElementById('cp-form-error');
 const cpDescricaoInput = document.getElementById('cp-descricao');
 const cpValorInput = document.getElementById('cp-valor');
-const cpDiaInput = document.getElementById('cp-dia');
 const cpDataInicioInput = document.getElementById('cp-data-inicio');
 const cpDataFimInput = document.getElementById('cp-data-fim');
 aplicarMascaraMoney(cpValorInput);
-
-cpDiaInput.addEventListener('input', () => {
-  cpDiaInput.value = cpDiaInput.value.replace(/\D/g, '');
-});
 
 document.querySelectorAll('input[name="cp-fim-tipo"]').forEach((el) => {
   el.addEventListener('change', () => {
@@ -622,8 +617,8 @@ cpForm.addEventListener('submit', async (e) => {
 
   const descricao = cpDescricaoInput.value.trim();
   const valor = parseMoney(cpValorInput.value);
-  const dia = Number(cpDiaInput.value);
   const dataInicio = cpDataInicioInput.value;
+  const dia = dataInicio ? Number(dataInicio.split('-')[2]) : null;
   const fimTipo = document.querySelector('input[name="cp-fim-tipo"]:checked').value;
   const dataFim = fimTipo === 'data' ? cpDataFimInput.value : null;
 
@@ -633,8 +628,8 @@ cpForm.addEventListener('submit', async (e) => {
     return;
   }
 
-  if (!dia || dia < 1 || dia > 31) {
-    cpErrorEl.textContent = 'Informe um dia de vencimento entre 1 e 31.';
+  if (!dataInicio) {
+    cpErrorEl.textContent = 'Informe a data de início.';
     cpErrorEl.hidden = false;
     return;
   }
