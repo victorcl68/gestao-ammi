@@ -5,7 +5,7 @@ Não trata de stack, setup ou como rodar — só do que o sistema faz e por quê
 O objetivo é que essas regras não se percam com o tempo, já que boa parte
 delas não é óbvia lendo o código e nenhuma está registrada em outro lugar.
 
-Última revisão: 2026-09-13 (adiciona módulo Fiado).
+Última revisão: 2026-09-13 (Fiado sem telefone, formulário reordenado).
 
 ---
 
@@ -493,9 +493,9 @@ sistema de cobrança.
 
 ### Pessoa e vendas
 
-Uma pessoa (`fiado_pessoas`: nome, telefone opcional) tem zero ou mais
-vendas (`fiado_vendas`: valor, descrição dos itens, data). O **saldo
-devido de uma pessoa é sempre a soma de todas as suas vendas** — não existe
+Uma pessoa (`fiado_pessoas`: só o nome) tem zero ou mais vendas
+(`fiado_vendas`: valor, descrição dos itens, data). O **saldo devido de
+uma pessoa é sempre a soma de todas as suas vendas** — não existe
 subtração de nada.
 
 #### Reaproveitamento de pessoa pelo nome
@@ -509,14 +509,8 @@ Ao lançar uma venda, o campo "Pessoa" é um texto livre com autocomplete
 - Caso contrário, uma pessoa nova é criada com esse nome.
 
 Não há tela separada de "cadastrar pessoa" — pessoa e primeira venda nascem
-juntas, no mesmo formulário.
-
-#### Telefone é atualizado, não substituído condicionalmente
-
-Se a pessoa já existe e o campo Telefone for preenchido nessa nova venda, o
-telefone cadastrado **é sobrescrito** com o novo valor. Não há como "manter
-o telefone antigo" se um novo for digitado por engano — a última venda que
-levar telefone preenchido vence.
+juntas, no mesmo formulário. Não há nenhum outro dado da pessoa além do
+nome (sem telefone, endereço, etc.) — o cadastro é deliberadamente mínimo.
 
 ### Total geral
 

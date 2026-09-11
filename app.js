@@ -971,7 +971,6 @@ const fiForm = document.getElementById('fi-form');
 const fiErrorEl = document.getElementById('fi-form-error');
 const fiPessoaInput = document.getElementById('fi-pessoa');
 const fiPessoasDatalistEl = document.getElementById('fi-pessoas-datalist');
-const fiTelefoneInput = document.getElementById('fi-telefone');
 const fiValorInput = document.getElementById('fi-valor');
 const fiDataInput = document.getElementById('fi-data');
 const fiDescricaoInput = document.getElementById('fi-descricao');
@@ -1027,10 +1026,7 @@ async function carregarFiado() {
       <li class="semana-grupo">
         <details class="fi-pessoa-details">
           <summary class="fi-pessoa-summary">
-            <span class="fi-pessoa-nome">
-              ${pessoa.nome}
-              ${pessoa.telefone ? `<span class="lancamento-data">${pessoa.telefone}</span>` : ''}
-            </span>
+            <span class="fi-pessoa-nome">${pessoa.nome}</span>
             <span class="lancamento-valor negativo">${formatMoney(totalPessoa)}</span>
             <button type="button" class="btn-icon fi-remover-pessoa-btn" data-pessoa-id="${pessoa.id}" aria-label="Remover pessoa" title="Remover pessoa">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1070,7 +1066,6 @@ bloquearDuranteSubmit(fiForm, async (e) => {
   fiErrorEl.hidden = true;
 
   const nomePessoa = fiPessoaInput.value.trim();
-  const telefone = fiTelefoneInput.value.trim();
   const valor = parseMoney(fiValorInput.value);
   const data = fiDataInput.value;
   const descricao = fiDescricaoInput.value.trim();
@@ -1103,7 +1098,7 @@ bloquearDuranteSubmit(fiForm, async (e) => {
   if (!pessoaId) {
     const { data: pessoaCriada, error: errCriar } = await supabase
       .from(FI_PESSOAS_TABLE)
-      .insert({ nome: nomePessoa, telefone: telefone || null })
+      .insert({ nome: nomePessoa })
       .select()
       .single();
 
@@ -1113,8 +1108,6 @@ bloquearDuranteSubmit(fiForm, async (e) => {
       return;
     }
     pessoaId = pessoaCriada.id;
-  } else if (telefone) {
-    await supabase.from(FI_PESSOAS_TABLE).update({ telefone }).eq('id', pessoaId);
   }
 
   const { error } = await supabase.from(FI_VENDAS_TABLE).insert({

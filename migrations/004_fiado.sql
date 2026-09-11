@@ -12,7 +12,6 @@
 create table fiado_pessoas (
   id          uuid primary key default gen_random_uuid(),
   nome        text not null,
-  telefone    text,
   created_at  timestamptz not null default now()
 );
 
