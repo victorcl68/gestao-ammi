@@ -697,8 +697,11 @@ button[type="submit"]:disabled {
     align-self: center;
   }
 
-  .desktop-grid .panel .card,
-  .desktop-grid .panel .tab-panels {
+  /* Só o filho direto do painel ocupa a linha 4 do subgrid. Os forms dentro
+     de .tab-panels são .card também e herdariam o grid-row, caindo numa linha
+     implícita do próprio .tab-panels em vez de preencherem o card. */
+  .desktop-grid .panel > .card,
+  .desktop-grid .panel > .tab-panels {
     grid-row: 4;
   }
 
