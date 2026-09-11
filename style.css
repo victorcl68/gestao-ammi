@@ -345,6 +345,17 @@ button[type="submit"]:active {
   margin-top: 24px;
 }
 
+.list-group {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.list-group .list {
+  margin-top: 0;
+}
+
 .list summary {
   font-size: 15px;
   color: var(--text-muted);
@@ -392,10 +403,43 @@ button[type="submit"]:active {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
   background: var(--card-bg);
   border-radius: 10px;
   padding: 12px 14px;
   box-shadow: var(--shadow);
+}
+
+.lancamento-atrasada {
+  border: 1px solid var(--danger);
+}
+
+.tag-atrasada {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--danger);
+  color: var(--primary-text);
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.lancamento-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.lancamento-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
 }
 
 .lancamento-info {
@@ -452,9 +496,9 @@ button[type="submit"]:active {
   .desktop-grid:not([hidden]) {
     position: relative;
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 24px;
-    max-width: 1000px;
+    max-width: 1300px;
     margin: 0 auto;
     padding: 32px 16px 48px;
   }
@@ -497,7 +541,8 @@ button[type="submit"]:active {
     grid-row: 4;
   }
 
-  .desktop-grid .panel .list {
+  .desktop-grid .panel .list,
+  .desktop-grid .panel .list-group {
     grid-row: 5;
     margin-top: 0;
   }

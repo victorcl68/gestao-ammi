@@ -417,7 +417,7 @@ const cpListEl = document.getElementById('cp-list');
 const cpContasListEl = document.getElementById('cp-contas-list');
 const cpForm = document.getElementById('cp-form');
 const cpErrorEl = document.getElementById('cp-form-error');
-const cpNomeInput = document.getElementById('cp-nome');
+const cpDescricaoInput = document.getElementById('cp-descricao');
 const cpValorInput = document.getElementById('cp-valor');
 const cpDiaInput = document.getElementById('cp-dia');
 const cpDataInicioInput = document.getElementById('cp-data-inicio');
@@ -447,22 +447,21 @@ function montarDataOcorrencia(ano, mesIndex, diaVencimento) {
   return `${ano}-${mm}-${dd}`;
 }
 
-// Gera as próximas `qtde` ocorrências (>= hoje) de uma conta recorrente
-// mensal, respeitando data_fim (se houver) e pulando datas em exdates.
-function gerarProximasOcorrencias(conta, exdates, qtde) {
-  const hoje = hojeISO();
-  const inicio = conta.data_inicio > hoje ? conta.data_inicio : hoje;
-  const [anoIni, mesIni] = inicio.split('-').map(Number);
+// Gera todas as datas de vencimento de conta_inicio até `ate` (inclusive),
+// respeitando data_fim (se houver) e pulando datas em exdates.
+function gerarOcorrenciasAte(conta, exdates, ate) {
+  const [anoIni, mesIni] = conta.data_inicio.split('-').map(Number);
 
   const ocorrencias = [];
   let ano = anoIni;
   let mesIndex = mesIni - 1;
 
-  while (ocorrencias.length < qtde) {
+  while (true) {
     const data = montarDataOcorrencia(ano, mesIndex, conta.dia_vencimento);
-
+    if (data > ate) break;
     if (conta.data_fim && data > conta.data_fim) break;
-    if (data >= inicio && !exdates.has(data)) {
+
+    if (data >= conta.data_inicio && !exdates.has(data)) {
       ocorrencias.push(data);
     }
 
@@ -474,6 +473,35 @@ function gerarProximasOcorrencias(conta, exdates, qtde) {
   }
 
   return ocorrencias;
+}
+
+// Ocorrências vencidas (< hoje) e não pagas de uma conta, mais as próximas
+// `qtdeFuturas` a partir de hoje (inclusive).
+function gerarOcorrenciasParaExibir(conta, exdates, pagosSet, qtdeFuturas) {
+  const hoje = hojeISO();
+
+  const atrasadas = gerarOcorrenciasAte(conta, exdates, hoje)
+    .filter((data) => data < hoje && !pagosSet.has(`${conta.id}|${data}`));
+
+  const futuras = [];
+  const [anoIni, mesIni] = hoje.split('-').map(Number);
+  let ano = anoIni;
+  let mesIndex = mesIni - 1;
+
+  while (futuras.length < qtdeFuturas) {
+    const data = montarDataOcorrencia(ano, mesIndex, conta.dia_vencimento);
+    if (conta.data_fim && data > conta.data_fim) break;
+    if (data >= hoje && data >= conta.data_inicio && !exdates.has(data)) {
+      futuras.push(data);
+    }
+    mesIndex += 1;
+    if (mesIndex > 11) {
+      mesIndex = 0;
+      ano += 1;
+    }
+  }
+
+  return [...atrasadas, ...futuras];
 }
 
 async function carregarContasPagar() {
@@ -509,26 +537,27 @@ async function carregarContasPagar() {
     const exdatesDaConta = new Set(
       exdatesRows.filter((e) => e.conta_id === conta.id).map((e) => e.data)
     );
-    const proximas = gerarProximasOcorrencias(conta, exdatesDaConta, 3);
+    const ocorrencias = gerarOcorrenciasParaExibir(conta, exdatesDaConta, pagosSet, 3);
 
-    proximas.forEach((data) => {
+    ocorrencias.forEach((data) => {
       const paga = pagosSet.has(`${conta.id}|${data}`);
+      const atrasada = data < hoje && !paga;
       if (data.slice(0, 7) === mesAtual && !paga) {
         totalMes += Number(conta.valor);
       }
-      ocorrenciasParaExibir.push({ conta, data, paga });
+      ocorrenciasParaExibir.push({ conta, data, paga, atrasada });
     });
   });
 
   ocorrenciasParaExibir.sort((a, b) => a.data.localeCompare(b.data));
   cpTotalMesEl.textContent = formatMoney(totalMes);
 
-  cpListEl.innerHTML = ocorrenciasParaExibir.map(({ conta, data, paga }) => `
-    <li class="lancamento-item">
+  cpListEl.innerHTML = ocorrenciasParaExibir.map(({ conta, data, paga, atrasada }) => `
+    <li class="lancamento-item${atrasada ? ' lancamento-atrasada' : ''}">
       <label class="lancamento-checkbox">
         <input type="checkbox" data-conta-id="${conta.id}" data-data="${data}" class="cp-pago-checkbox" ${paga ? 'checked' : ''}>
         <div class="lancamento-info">
-          <span class="lancamento-desc">${conta.nome}</span>
+          <span class="lancamento-desc">${conta.descricao}${atrasada ? ' <span class="tag-atrasada">Atrasada</span>' : ''}</span>
           <span class="lancamento-data">${formatDataBR(data)}</span>
         </div>
       </label>
@@ -545,7 +574,7 @@ async function carregarContasPagar() {
   cpContasListEl.innerHTML = contas.map((conta) => `
     <li class="lancamento-item">
       <div class="lancamento-info">
-        <span class="lancamento-desc">${conta.nome} — dia ${conta.dia_vencimento}</span>
+        <span class="lancamento-desc">${conta.descricao} — dia ${conta.dia_vencimento}</span>
         <span class="lancamento-data">${conta.data_fim ? `até ${formatDataBR(conta.data_fim)}` : 'sem fim'}</span>
       </div>
       <span class="lancamento-valor negativo">${formatMoney(conta.valor)}</span>
@@ -591,7 +620,7 @@ cpForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   cpErrorEl.hidden = true;
 
-  const nome = cpNomeInput.value.trim();
+  const descricao = cpDescricaoInput.value.trim();
   const valor = parseMoney(cpValorInput.value);
   const dia = Number(cpDiaInput.value);
   const dataInicio = cpDataInicioInput.value;
@@ -617,7 +646,7 @@ cpForm.addEventListener('submit', async (e) => {
   }
 
   const { error } = await supabase.from(CP_TABLE).insert({
-    nome,
+    descricao,
     valor,
     dia_vencimento: dia,
     data_inicio: dataInicio,

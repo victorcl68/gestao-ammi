@@ -1,4 +1,6 @@
--- Rode este script no SQL Editor do seu projeto Supabase.
+-- Migration 001: Caixa Casa e Salário.
+-- Já aplicada se você seguiu o setup inicial do projeto — não precisa
+-- rodar de novo se essas tabelas já existem no seu projeto Supabase.
 
 create table caixa_casa_lancamentos (
   id          uuid primary key default gen_random_uuid(),
