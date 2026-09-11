@@ -25,6 +25,20 @@ function parseMoney(text) {
   return parseFloat(cleaned);
 }
 
+// Desabilita o botão de submit do form enquanto o handler roda, evitando
+// clique duplo/duplo envio. Reabilita mesmo se o handler lançar erro.
+function bloquearDuranteSubmit(form, handler) {
+  form.addEventListener('submit', async (e) => {
+    const btn = form.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    try {
+      await handler(e);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
 // Aplica máscara de dinheiro (ex: "123456" -> "1.234,56") enquanto o usuário digita.
 function aplicarMascaraMoney(input) {
   input.addEventListener('input', () => {
@@ -197,7 +211,7 @@ supabase.auth.onAuthStateChange((_event, session) => {
 const loginForm = document.getElementById('login-form');
 const loginErrorEl = document.getElementById('login-error');
 
-loginForm.addEventListener('submit', async (e) => {
+bloquearDuranteSubmit(loginForm, async (e) => {
   e.preventDefault();
   loginErrorEl.hidden = true;
 
@@ -297,7 +311,7 @@ async function carregarCaixaCasa() {
   }).join('');
 }
 
-ccForm.addEventListener('submit', async (e) => {
+bloquearDuranteSubmit(ccForm, async (e) => {
   e.preventDefault();
   ccErrorEl.hidden = true;
 
@@ -424,7 +438,7 @@ async function carregarSalario() {
   }).join('');
 }
 
-salVendaForm.addEventListener('submit', async (e) => {
+bloquearDuranteSubmit(salVendaForm, async (e) => {
   e.preventDefault();
   salVendaErrorEl.hidden = true;
 
@@ -460,7 +474,7 @@ salVendaForm.addEventListener('submit', async (e) => {
   await carregarSalario();
 });
 
-salPagamentoForm.addEventListener('submit', async (e) => {
+bloquearDuranteSubmit(salPagamentoForm, async (e) => {
   e.preventDefault();
   salPagamentoErrorEl.hidden = true;
 
@@ -819,7 +833,7 @@ cpContasListEl.addEventListener('click', async (e) => {
   await carregarContasPagar();
 });
 
-cpForm.addEventListener('submit', async (e) => {
+bloquearDuranteSubmit(cpForm, async (e) => {
   e.preventDefault();
   cpErrorEl.hidden = true;
 
