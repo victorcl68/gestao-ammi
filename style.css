@@ -652,6 +652,7 @@ button[type="submit"]:disabled {
     position: relative;
     display: grid;
     grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: auto auto 44px auto 1fr;
     gap: 24px;
     max-width: 1600px;
     margin: 0 auto;
@@ -668,7 +669,8 @@ button[type="submit"]:disabled {
 
   .desktop-grid .panel {
     display: grid !important;
-    grid-template-rows: auto auto 44px auto 1fr;
+    grid-template-rows: subgrid;
+    grid-row: 1 / 6;
     row-gap: 16px;
     max-width: none;
     margin: 0;
