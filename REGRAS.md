@@ -5,7 +5,7 @@ Não trata de stack, setup ou como rodar — só do que o sistema faz e por quê
 O objetivo é que essas regras não se percam com o tempo, já que boa parte
 delas não é óbvia lendo o código e nenhuma está registrada em outro lugar.
 
-Última revisão: 2026-09-12.
+Última revisão: 2026-09-13.
 
 ---
 
@@ -239,9 +239,10 @@ A lista mostra, por conta:
 O limite de 3 é sobre as futuras, não sobre o total. Uma conta com 5 meses
 de atraso mostra 5 atrasadas + 3 futuras = 8 linhas.
 
-Uma ocorrência já paga entra nesse cálculo (**ocupa uma das 3 vagas de
-futuras**), mas não fica misturada na lista principal — ela é movida para
-a seção "Pagos" (ver [Pagamento de ocorrências](#pagamento-de-ocorrências)).
+Uma ocorrência já paga **continua aparecendo** (com o checkbox marcado) e
+ocupa uma das 3 vagas de futuras. Isso é intencional: permite desmarcar um
+pagamento feito por engano direto na lista, sem precisar procurar em outro
+lugar.
 
 ---
 
@@ -299,22 +300,10 @@ ocorrência volta a contar como pendente.
 Não há registro de valor pago nem de data de pagamento — apenas o fato
 booleano de que aquela ocorrência foi paga.
 
-#### Seção "Pagos"
-
-Ocorrências pagas não ficam misturadas nos blocos de semana: são movidas
-para uma seção separada, recolhida por padrão (`<details>` fechado), no fim
-da lista. O checkbox continua ali, então desmarcar um pagamento feito por
-engano é só abrir a seção e desmarcar — a ocorrência volta para a lista
-principal automaticamente.
-
-Dentro da seção "Pagos", os itens vêm ordenados do mais recente para o mais
-antigo (ordem inversa da lista principal). Não há botões de editar valor
-nem de pular numa ocorrência já paga.
-
-Como essa seção só existe para as ocorrências que estão dentro da janela
-de cálculo (atrasadas + as 3 próximas futuras — ver acima), uma conta
-mensal com anos de pagamentos **não acumula todo o histórico ali**: só
-aparecem os pagamentos que caem dentro dessa janela.
+Ocorrências pagas ficam misturadas no mesmo bloco de semana das não pagas,
+ordenadas por data como as demais — não há seção separada. A única
+diferença visual é o checkbox já vir marcado, e os botões de editar valor
+e pular não aparecem numa ocorrência já paga.
 
 ---
 
@@ -427,6 +416,19 @@ polui a lista com um grupo quase vazio.
 
 O limite de 3 dias é arbitrário, escolhido por equilíbrio: semanas com 4+
 dias já têm conteúdo suficiente para justificar um bloco próprio.
+
+#### Destaque da semana atual
+
+O cabeçalho da semana que contém a data de hoje ganha uma cor de destaque e
+um pontinho ao lado — discreto, mas suficiente para localizar rapidamente
+"onde estou" na lista. Um bloco fundido (`Semana 4-5`) é considerado atual
+se hoje cair em qualquer uma das duas semanas que o compõem.
+
+#### Total por semana
+
+Cada bloco mostra, no cabeçalho, a soma dos valores de todas as suas
+ocorrências (pagas e não pagas), alinhada à direita. Não distingue pago de
+não pago — é o total do que está programado para aquela semana.
 
 ---
 

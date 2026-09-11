@@ -511,7 +511,6 @@ bloquearDuranteSubmit(salPagamentoForm, async (e) => {
 
 const cpTotalMesEl = document.getElementById('cp-total-mes');
 const cpListEl = document.getElementById('cp-list');
-const cpPagosListEl = document.getElementById('cp-pagos-list');
 const cpContasListEl = document.getElementById('cp-contas-list');
 const cpForm = document.getElementById('cp-form');
 const cpErrorEl = document.getElementById('cp-form-error');
@@ -668,7 +667,6 @@ async function carregarContasPagar() {
 
   if (contas.length === 0) {
     cpListEl.innerHTML = `<li class="empty-state">Nenhuma conta cadastrada.</li>`;
-    cpPagosListEl.innerHTML = `<li class="empty-state">Nenhum pagamento ainda.</li>`;
     cpContasListEl.innerHTML = `<li class="empty-state">Nenhuma conta cadastrada.</li>`;
     cpTotalMesEl.innerHTML = `${formatMoney(0)} <span class="balance-value-total">de ${formatMoney(0)}</span>`;
     return;
@@ -679,7 +677,6 @@ async function carregarContasPagar() {
   let totalMesPago = 0;
   let totalMesNaoPago = 0;
   const ocorrenciasParaExibir = [];
-  const ocorrenciasPagas = [];
 
   contas.forEach((conta) => {
     let ocorrencias;
@@ -706,16 +703,11 @@ async function carregarContasPagar() {
         if (paga) totalMesPago += valor;
         else totalMesNaoPago += valor;
       }
-      if (paga) {
-        ocorrenciasPagas.push({ conta, data, valor, paga, atrasada });
-      } else {
-        ocorrenciasParaExibir.push({ conta, data, valor, paga, atrasada });
-      }
+      ocorrenciasParaExibir.push({ conta, data, valor, paga, atrasada });
     });
   });
 
   ocorrenciasParaExibir.sort((a, b) => a.data.localeCompare(b.data));
-  ocorrenciasPagas.sort((a, b) => a.data.localeCompare(b.data));
   const totalMesGeral = totalMesPago + totalMesNaoPago;
   cpTotalMesEl.innerHTML = `${formatMoney(totalMesNaoPago)} <span class="balance-value-total">de ${formatMoney(totalMesGeral)}</span>`;
 
@@ -780,13 +772,6 @@ async function carregarContasPagar() {
 
   cpListEl.innerHTML = renderizarGruposSemana(agruparPorSemana(ocorrenciasParaExibir));
 
-  const gruposPagos = agruparPorSemana(ocorrenciasPagas).reverse();
-  gruposPagos.forEach((grupo) => grupo.itens.reverse());
-
-  cpPagosListEl.innerHTML = ocorrenciasPagas.length === 0
-    ? `<li class="empty-state">Nenhum pagamento ainda.</li>`
-    : renderizarGruposSemana(gruposPagos);
-
   cpContasListEl.innerHTML = contas.map((conta) => {
     const valorExibido = conta.tipo === 'parcelado'
       ? parcelasRows.filter((p) => p.conta_id === conta.id).reduce((acc, p) => acc + Number(p.valor), 0)
@@ -824,7 +809,6 @@ async function alternarPagoContasPagar(e) {
 }
 
 cpListEl.addEventListener('change', alternarPagoContasPagar);
-cpPagosListEl.addEventListener('change', alternarPagoContasPagar);
 
 cpListEl.addEventListener('click', async (e) => {
   const pularBtn = e.target.closest('.cp-pular-btn');
