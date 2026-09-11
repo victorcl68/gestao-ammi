@@ -68,6 +68,87 @@ function formatDataBR(isoDate) {
   return `${day}/${month}/${year}`;
 }
 
+// Quantos dias antes do dia 1 do mês a semana (segunda-feira) já tinha
+// começado. Ex: se o mês começa numa quarta, offset = 2 (a segunda foi
+// 2 dias antes do dia 1).
+function offsetAteSegunda(ano, mes) {
+  const diaSemanaPrimeiroDia = new Date(ano, mes - 1, 1).getDay(); // 0=domingo..6=sábado
+  return (diaSemanaPrimeiroDia + 6) % 7;
+}
+
+// Índice da semana (1-based) dentro do mês da própria data, com semanas de
+// calendário real começando na segunda-feira. A "semana 1" pode ter menos
+// de 7 dias se o mês não começar numa segunda.
+function semanaDoMes(isoDate) {
+  const [ano, mes, dia] = isoDate.split('-').map(Number);
+  return Math.ceil((dia + offsetAteSegunda(ano, mes)) / 7);
+}
+
+function ultimoDiaDoMesISO(ano, mes) {
+  return new Date(ano, mes, 0).getDate();
+}
+
+// Último dia do mês (número) que ainda pertence à semana `semana` daquele
+// mês/ano — usado pra saber quantos dias do mês essa semana realmente cobre.
+function ultimoDiaDoMesNaSemana(ano, mes, semana) {
+  const fimTeoricoDaSemana = semana * 7 - offsetAteSegunda(ano, mes);
+  return Math.min(fimTeoricoDaSemana, ultimoDiaDoMesISO(ano, mes));
+}
+
+function primeiroDiaDoMesNaSemana(ano, mes, semana) {
+  const inicioTeoricoDaSemana = (semana - 1) * 7 - offsetAteSegunda(ano, mes) + 1;
+  return Math.max(inicioTeoricoDaSemana, 1);
+}
+
+// Agrupa ocorrências (já ordenadas por data) em blocos "Mês / Semana N",
+// fundindo a última semana de um mês com a penúltima quando ela tiver 3
+// dias ou menos daquele mês (evita um bloco final minúsculo/solto).
+function agruparPorSemana(ocorrencias) {
+  const grupos = [];
+  const chaveGrupo = (ano, mes, semana) => `${ano}-${mes}-${semana}`;
+  const porChave = new Map();
+
+  ocorrencias.forEach((oc) => {
+    const [ano, mes] = oc.data.split('-').map(Number);
+    const semana = semanaDoMes(oc.data);
+    const chave = chaveGrupo(ano, mes, semana);
+
+    if (!porChave.has(chave)) {
+      const grupo = { ano, mes, semana, itens: [] };
+      porChave.set(chave, grupo);
+      grupos.push(grupo);
+    }
+    porChave.get(chave).itens.push(oc);
+  });
+
+  // Funde a última semana de cada mês com a penúltima se tiver ≤3 dias do mês.
+  for (let i = grupos.length - 1; i >= 0; i--) {
+    const grupo = grupos[i];
+    const anterior = grupos[i - 1];
+    const ehUltimaSemanaDoMes = !grupos[i + 1] || grupos[i + 1].mes !== grupo.mes || grupos[i + 1].ano !== grupo.ano;
+    const mesmoMesQueAnterior = anterior && anterior.mes === grupo.mes && anterior.ano === grupo.ano;
+
+    if (ehUltimaSemanaDoMes && mesmoMesQueAnterior) {
+      const inicio = primeiroDiaDoMesNaSemana(grupo.ano, grupo.mes, grupo.semana);
+      const fim = ultimoDiaDoMesNaSemana(grupo.ano, grupo.mes, grupo.semana);
+      const diasDoMesNaSemana = fim - inicio + 1;
+
+      if (diasDoMesNaSemana <= 3) {
+        anterior.itens.push(...grupo.itens);
+        anterior.semanaFundida = true;
+        grupos.splice(i, 1);
+      }
+    }
+  }
+
+  return grupos;
+}
+
+const NOMES_MES = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+];
+
 // ===================== NAVEGAÇÃO ENTRE VIEWS =====================
 
 const views = {
@@ -613,30 +694,45 @@ async function carregarContasPagar() {
   ocorrenciasParaExibir.sort((a, b) => a.data.localeCompare(b.data));
   cpTotalMesEl.textContent = formatMoney(totalMes);
 
-  cpListEl.innerHTML = ocorrenciasParaExibir.map(({ conta, data, valor, paga, atrasada }) => `
-    <li class="lancamento-item${atrasada ? ' lancamento-atrasada' : ''}">
-      <label class="lancamento-checkbox">
-        <input type="checkbox" data-conta-id="${conta.id}" data-data="${data}" class="cp-pago-checkbox" ${paga ? 'checked' : ''}>
-        <div class="lancamento-info">
-          <span class="lancamento-desc">${conta.descricao}${atrasada ? ' <span class="tag-atrasada">Atrasada</span>' : ''}</span>
-          <span class="lancamento-data">${formatDataBR(data)}</span>
-        </div>
-      </label>
-      <span class="lancamento-valor negativo">${formatMoney(valor)}</span>
-      <button type="button" class="btn-icon btn-icon-neutro cp-editar-btn" data-conta-id="${conta.id}" data-data="${data}" data-tipo="${conta.tipo}" data-valor="${valor}" aria-label="Editar valor" title="Editar valor">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-          <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-        </svg>
-      </button>
-      <button type="button" class="btn-icon cp-pular-btn" data-conta-id="${conta.id}" data-data="${data}" data-tipo="${conta.tipo}" aria-label="Pular esta ocorrência" title="Pular esta ocorrência">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
-    </li>
-  `).join('');
+  const gruposSemana = agruparPorSemana(ocorrenciasParaExibir);
+
+  cpListEl.innerHTML = gruposSemana.map((grupo) => {
+    const itensHtml = grupo.itens.map(({ conta, data, valor, paga, atrasada }) => `
+      <li class="lancamento-item${atrasada ? ' lancamento-atrasada' : ''}">
+        <label class="lancamento-checkbox">
+          <input type="checkbox" data-conta-id="${conta.id}" data-data="${data}" class="cp-pago-checkbox" ${paga ? 'checked' : ''}>
+          <div class="lancamento-info">
+            <span class="lancamento-desc">${conta.descricao}${atrasada ? ' <span class="tag-atrasada">Atrasada</span>' : ''}</span>
+            <span class="lancamento-data">${formatDataBR(data)}</span>
+          </div>
+        </label>
+        <span class="lancamento-valor negativo">${formatMoney(valor)}</span>
+        <button type="button" class="btn-icon btn-icon-neutro cp-editar-btn" data-conta-id="${conta.id}" data-data="${data}" data-tipo="${conta.tipo}" data-valor="${valor}" aria-label="Editar valor" title="Editar valor">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+            <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+          </svg>
+        </button>
+        <button type="button" class="btn-icon cp-pular-btn" data-conta-id="${conta.id}" data-data="${data}" data-tipo="${conta.tipo}" aria-label="Pular esta ocorrência" title="Pular esta ocorrência">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </li>
+    `).join('');
+
+    const rotuloSemana = grupo.semanaFundida
+      ? `Semana ${grupo.semana - 1}-${grupo.semana}`
+      : `Semana ${grupo.semana}`;
+
+    return `
+      <li class="semana-grupo">
+        <span class="semana-grupo-titulo">${NOMES_MES[grupo.mes - 1]} — ${rotuloSemana}</span>
+        <ul class="lancamentos">${itensHtml}</ul>
+      </li>
+    `;
+  }).join('');
 
   cpContasListEl.innerHTML = contas.map((conta) => {
     const valorExibido = conta.tipo === 'parcelado'

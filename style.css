@@ -425,6 +425,24 @@ button[type="submit"]:active {
   gap: 8px;
 }
 
+.semana-grupo {
+  list-style: none;
+}
+
+.semana-grupo + .semana-grupo {
+  margin-top: 20px;
+}
+
+.semana-grupo-titulo {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
 .lancamento-item {
   display: flex;
   justify-content: space-between;
