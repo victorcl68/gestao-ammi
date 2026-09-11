@@ -56,6 +56,10 @@
         <span class="menu-title">Contas a Pagar</span>
         <span class="menu-sub">Mensal ou parcelado</span>
       </button>
+      <button class="menu-card" data-nav="fiado">
+        <span class="menu-title">Fiado</span>
+        <span class="menu-sub">Vendas fiadas por pessoa</span>
+      </button>
     </nav>
   </main>
 
@@ -241,6 +245,46 @@
           <ul id="cp-contas-list" class="lancamentos"></ul>
         </details>
       </div>
+    </main>
+
+    <!-- ===================== FIADO ===================== -->
+    <main id="view-fiado" class="page view panel" hidden>
+      <header class="topbar">
+        <button class="btn-link" data-nav="home">&larr; Início</button>
+        <h1>Fiado</h1>
+      </header>
+      <h2 class="panel-title">Fiado</h2>
+
+      <section class="balance-box">
+        <span class="balance-label">Total fiado</span>
+        <span id="fi-total" class="balance-value">R$ 0,00</span>
+      </section>
+
+      <form id="fi-form" class="card">
+        <label for="fi-pessoa">Pessoa</label>
+        <input type="text" id="fi-pessoa" list="fi-pessoas-datalist" placeholder="Nome da pessoa" required autocomplete="off">
+        <datalist id="fi-pessoas-datalist"></datalist>
+
+        <label for="fi-telefone">Telefone <span class="opcional">(opcional)</span></label>
+        <input type="text" id="fi-telefone" placeholder="Ex: (11) 91234-5678">
+
+        <label for="fi-valor">Valor</label>
+        <input type="text" id="fi-valor" inputmode="decimal" placeholder="0,00" required>
+
+        <label for="fi-data">Data</label>
+        <input type="date" id="fi-data" required>
+
+        <label for="fi-descricao">Descrição <span class="opcional">(itens vendidos)</span></label>
+        <input type="text" id="fi-descricao" placeholder="Ex: 2kg de arroz, 1 óleo">
+
+        <button type="submit">Salvar</button>
+        <p id="fi-form-error" class="error" hidden></p>
+      </form>
+
+      <details class="list">
+        <summary>Pessoas</summary>
+        <ul id="fi-list" class="lancamentos"></ul>
+      </details>
     </main>
   </div>
 

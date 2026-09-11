@@ -14,6 +14,8 @@ const CP_EXDATES_TABLE = 'contas_pagar_exdates';
 const CP_PARCELAS_TABLE = 'contas_pagar_parcelas';
 const CP_PAGAMENTOS_TABLE = 'contas_pagar_pagamentos';
 const CP_AJUSTES_TABLE = 'contas_pagar_ajustes';
+const FI_PESSOAS_TABLE = 'fiado_pessoas';
+const FI_VENDAS_TABLE = 'fiado_vendas';
 const PERCENTUAL_COMISSAO = 0.25;
 
 // ===================== HELPERS: dinheiro / data =====================
@@ -147,6 +149,7 @@ const views = {
   'caixa-casa': document.getElementById('view-caixa-casa'),
   salario: document.getElementById('view-salario'),
   'contas-pagar': document.getElementById('view-contas-pagar'),
+  fiado: document.getElementById('view-fiado'),
 };
 
 const desktopGridEl = document.getElementById('desktop-grid');
@@ -162,6 +165,7 @@ function showView(name) {
   if (name === 'caixa-casa' || name === 'home') carregarCaixaCasa();
   if (name === 'salario' || name === 'home') carregarSalario();
   if (name === 'contas-pagar' || name === 'home') carregarContasPagar();
+  if (name === 'fiado' || name === 'home') carregarFiado();
 }
 
 document.querySelectorAll('[data-nav]').forEach((el) => {
@@ -957,6 +961,178 @@ bloquearDuranteSubmit(cpForm, async (e) => {
   cpValorModoEl.hidden = true;
   cpDatasParcelasEl.innerHTML = '';
   await carregarContasPagar();
+});
+
+// ===================== FIADO =====================
+
+const fiTotalEl = document.getElementById('fi-total');
+const fiListEl = document.getElementById('fi-list');
+const fiForm = document.getElementById('fi-form');
+const fiErrorEl = document.getElementById('fi-form-error');
+const fiPessoaInput = document.getElementById('fi-pessoa');
+const fiPessoasDatalistEl = document.getElementById('fi-pessoas-datalist');
+const fiTelefoneInput = document.getElementById('fi-telefone');
+const fiValorInput = document.getElementById('fi-valor');
+const fiDataInput = document.getElementById('fi-data');
+const fiDescricaoInput = document.getElementById('fi-descricao');
+aplicarMascaraMoney(fiValorInput);
+
+async function carregarFiado() {
+  fiDataInput.value = fiDataInput.value || hojeISO();
+
+  const [{ data: pessoas, error: errPessoas }, { data: vendas, error: errVendas }] = await Promise.all([
+    supabase.from(FI_PESSOAS_TABLE).select('*').order('nome', { ascending: true }),
+    supabase.from(FI_VENDAS_TABLE).select('*').order('data', { ascending: false }).order('created_at', { ascending: false }),
+  ]);
+
+  if (errPessoas || errVendas) {
+    fiListEl.innerHTML = `<li class="empty-state">Erro ao carregar fiado.</li>`;
+    return;
+  }
+
+  fiPessoasDatalistEl.innerHTML = pessoas.map((p) => `<option value="${p.nome}">`).join('');
+
+  if (pessoas.length === 0) {
+    fiListEl.innerHTML = `<li class="empty-state">Nenhuma pessoa cadastrada.</li>`;
+    fiTotalEl.textContent = formatMoney(0);
+    return;
+  }
+
+  let totalGeral = 0;
+
+  fiListEl.innerHTML = pessoas.map((pessoa) => {
+    const vendasDaPessoa = vendas.filter((v) => v.pessoa_id === pessoa.id);
+    const totalPessoa = vendasDaPessoa.reduce((acc, v) => acc + Number(v.valor), 0);
+    totalGeral += totalPessoa;
+
+    const vendasHtml = vendasDaPessoa.length === 0
+      ? `<li class="empty-state">Nenhuma venda ainda.</li>`
+      : vendasDaPessoa.map((v) => `
+        <li class="lancamento-item">
+          <div class="lancamento-info">
+            <span class="lancamento-desc">${v.descricao || 'Sem descrição'}</span>
+            <span class="lancamento-data">${formatDataBR(v.data)}</span>
+          </div>
+          <span class="lancamento-valor negativo">${formatMoney(v.valor)}</span>
+          <button type="button" class="btn-icon fi-remover-venda-btn" data-venda-id="${v.id}" aria-label="Remover venda" title="Remover venda">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </li>
+      `).join('');
+
+    return `
+      <li class="semana-grupo">
+        <details class="fi-pessoa-details">
+          <summary class="fi-pessoa-summary">
+            <span class="fi-pessoa-nome">
+              ${pessoa.nome}
+              ${pessoa.telefone ? `<span class="lancamento-data">${pessoa.telefone}</span>` : ''}
+            </span>
+            <span class="lancamento-valor negativo">${formatMoney(totalPessoa)}</span>
+            <button type="button" class="btn-icon fi-remover-pessoa-btn" data-pessoa-id="${pessoa.id}" aria-label="Remover pessoa" title="Remover pessoa">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </button>
+          </summary>
+          <ul class="lancamentos">${vendasHtml}</ul>
+        </details>
+      </li>
+    `;
+  }).join('');
+
+  fiTotalEl.textContent = formatMoney(totalGeral);
+}
+
+fiListEl.addEventListener('click', async (e) => {
+  const removerVendaBtn = e.target.closest('.fi-remover-venda-btn');
+  if (removerVendaBtn) {
+    await supabase.from(FI_VENDAS_TABLE).delete().eq('id', removerVendaBtn.dataset.vendaId);
+    await carregarFiado();
+    return;
+  }
+
+  const removerPessoaBtn = e.target.closest('.fi-remover-pessoa-btn');
+  if (removerPessoaBtn) {
+    e.preventDefault();
+    if (!confirm('Remover esta pessoa e todo o seu histórico de vendas fiadas?')) return;
+    await supabase.from(FI_PESSOAS_TABLE).delete().eq('id', removerPessoaBtn.dataset.pessoaId);
+    await carregarFiado();
+  }
+});
+
+bloquearDuranteSubmit(fiForm, async (e) => {
+  e.preventDefault();
+  fiErrorEl.hidden = true;
+
+  const nomePessoa = fiPessoaInput.value.trim();
+  const telefone = fiTelefoneInput.value.trim();
+  const valor = parseMoney(fiValorInput.value);
+  const data = fiDataInput.value;
+  const descricao = fiDescricaoInput.value.trim();
+
+  if (!nomePessoa) {
+    fiErrorEl.textContent = 'Informe o nome da pessoa.';
+    fiErrorEl.hidden = false;
+    return;
+  }
+
+  if (!valor || valor <= 0) {
+    fiErrorEl.textContent = 'Informe um valor válido.';
+    fiErrorEl.hidden = false;
+    return;
+  }
+
+  const { data: pessoasExistentes, error: errBusca } = await supabase
+    .from(FI_PESSOAS_TABLE)
+    .select('*')
+    .ilike('nome', nomePessoa);
+
+  if (errBusca) {
+    fiErrorEl.textContent = 'Erro ao salvar. Tente novamente.';
+    fiErrorEl.hidden = false;
+    return;
+  }
+
+  let pessoaId = pessoasExistentes[0]?.id;
+
+  if (!pessoaId) {
+    const { data: pessoaCriada, error: errCriar } = await supabase
+      .from(FI_PESSOAS_TABLE)
+      .insert({ nome: nomePessoa, telefone: telefone || null })
+      .select()
+      .single();
+
+    if (errCriar) {
+      fiErrorEl.textContent = 'Erro ao salvar. Tente novamente.';
+      fiErrorEl.hidden = false;
+      return;
+    }
+    pessoaId = pessoaCriada.id;
+  } else if (telefone) {
+    await supabase.from(FI_PESSOAS_TABLE).update({ telefone }).eq('id', pessoaId);
+  }
+
+  const { error } = await supabase.from(FI_VENDAS_TABLE).insert({
+    pessoa_id: pessoaId,
+    valor,
+    data,
+    descricao: descricao || null,
+  });
+
+  if (error) {
+    fiErrorEl.textContent = 'Erro ao salvar. Tente novamente.';
+    fiErrorEl.hidden = false;
+    return;
+  }
+
+  fiForm.reset();
+  fiDataInput.value = hojeISO();
+  await carregarFiado();
 });
 
 // ===================== INIT =====================

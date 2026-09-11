@@ -5,8 +5,7 @@ Não trata de stack, setup ou como rodar — só do que o sistema faz e por quê
 O objetivo é que essas regras não se percam com o tempo, já que boa parte
 delas não é óbvia lendo o código e nenhuma está registrada em outro lugar.
 
-Última revisão: 2026-09-13 (rótulos dinâmicos do card e correção do
-subtítulo de pago/total).
+Última revisão: 2026-09-13 (adiciona módulo Fiado).
 
 ---
 
@@ -24,6 +23,7 @@ subtítulo de pago/total).
   - [Atrasadas](#atrasadas)
   - [Card do topo: esta semana e a próxima](#card-do-topo-esta-semana-e-a-próxima)
   - [Agrupamento por semana](#agrupamento-por-semana)
+- [Módulo: Fiado](#módulo-fiado)
 - [Regras transversais](#regras-transversais)
 - [Comportamentos conhecidos e limitações](#comportamentos-conhecidos-e-limitações)
 
@@ -473,6 +473,62 @@ um pontinho ao lado — discreto, mas suficiente para localizar rapidamente
 Cada bloco mostra, no cabeçalho, a soma dos valores de todas as suas
 ocorrências (pagas e não pagas), alinhada à direita. Não distingue pago de
 não pago — é o total do que está programado para aquela semana.
+
+---
+
+## Módulo: Fiado
+
+Registro de vendas fiadas por pessoa. É o módulo mais simples do sistema —
+**não tem nenhuma regra de negócio complexa de propósito**. Existe só para
+documentar quem deve o quê, sem controle de pagamento, sem cálculo, sem
+recorrência.
+
+### Sem ligação com nada
+
+Fiado não se comunica com nenhum outro módulo, nem entre si (não há
+conceito de "pagamento" que abata o saldo). Uma venda fiada, uma vez
+lançada, fica registrada para sempre até ser removida manualmente. Isso é
+proposital: o objetivo é ter um histórico do que foi vendido fiado, não um
+sistema de cobrança.
+
+### Pessoa e vendas
+
+Uma pessoa (`fiado_pessoas`: nome, telefone opcional) tem zero ou mais
+vendas (`fiado_vendas`: valor, descrição dos itens, data). O **saldo
+devido de uma pessoa é sempre a soma de todas as suas vendas** — não existe
+subtração de nada.
+
+#### Reaproveitamento de pessoa pelo nome
+
+Ao lançar uma venda, o campo "Pessoa" é um texto livre com autocomplete
+(sugestões das pessoas já cadastradas). No momento de salvar:
+
+- Se já existir uma pessoa com esse nome (comparação **sem diferenciar
+  maiúsculas/minúsculas**, via `ilike` sem coringas — busca exata
+  case-insensitive), a venda é associada a ela.
+- Caso contrário, uma pessoa nova é criada com esse nome.
+
+Não há tela separada de "cadastrar pessoa" — pessoa e primeira venda nascem
+juntas, no mesmo formulário.
+
+#### Telefone é atualizado, não substituído condicionalmente
+
+Se a pessoa já existe e o campo Telefone for preenchido nessa nova venda, o
+telefone cadastrado **é sobrescrito** com o novo valor. Não há como "manter
+o telefone antigo" se um novo for digitado por engano — a última venda que
+levar telefone preenchido vence.
+
+### Total geral
+
+O card do topo (`Total fiado`) soma o saldo devido de **todas** as
+pessoas — é a soma de tudo que está fiado no momento, sem filtro de data.
+
+### Exclusão
+
+- Remover uma **venda** apaga só aquela linha.
+- Remover uma **pessoa** apaga, em cascata (`on delete cascade`), todo o
+  seu histórico de vendas — sem confirmação extra além do `confirm()` do
+  navegador, e sem possibilidade de desfazer.
 
 ---
 

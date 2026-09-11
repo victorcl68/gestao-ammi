@@ -78,9 +78,9 @@ Antes de editar qualquer arquivo em `migrations/`:
 2. Se sim, crie uma nova numerada (`004_...`) com o incremento
 3. Se não, pode editar no lugar
 
-Estado conhecido em 2026-09-11: **001, 002 e 003 já foram aplicadas.** O
-usuário avisa quando roda uma nova — atualize esta linha quando isso
-acontecer.
+Estado conhecido em 2026-09-13: **001, 002 e 003 já foram aplicadas. 004
+(Fiado) ainda não.** O usuário avisa quando roda uma nova — atualize esta
+linha quando isso acontecer.
 
 Toda tabela nova precisa de RLS habilitado e a policy `auth_all`, seguindo
 o padrão das existentes. Sem isso, a tabela fica inacessível pelo app.
@@ -97,7 +97,7 @@ o padrão das existentes. Sem isso, a tabela fica inacessível pelo app.
   `new Date()` direto para obter a data corrente.
 - **Valores no banco são sempre positivos.** O sinal vem do campo `tipo`.
 - **Mobile e desktop compartilham o mesmo HTML.** As seções vivem dentro de
-  `#desktop-grid`, que usa `display: contents` no mobile e vira grid de 3
+  `#desktop-grid`, que usa `display: contents` no mobile e vira grid de 4
   colunas acima de 900px. Cuidado ao mexer nisso — já causou tela em branco
   no mobile uma vez.
 
