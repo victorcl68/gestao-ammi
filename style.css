@@ -59,6 +59,10 @@ body {
   flex: 1;
 }
 
+.topbar-end {
+  justify-content: flex-end;
+}
+
 .btn-link {
   background: none;
   border: none;
@@ -433,6 +437,10 @@ button[type="submit"]:active {
 
 /* Desktop: Caixa Casa e Salário lado a lado */
 .panel-title {
+  display: none;
+}
+
+.desktop-grid {
   display: none;
 }
 
