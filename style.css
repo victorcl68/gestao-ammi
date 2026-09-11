@@ -434,13 +434,27 @@ button[type="submit"]:active {
 }
 
 .semana-grupo-titulo {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
   margin-bottom: 8px;
+}
+
+.semana-grupo-titulo.semana-atual {
+  color: var(--primary-dark);
+}
+
+.semana-atual-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary);
+  flex-shrink: 0;
 }
 
 .lancamento-item {

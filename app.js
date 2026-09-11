@@ -695,8 +695,14 @@ async function carregarContasPagar() {
   cpTotalMesEl.textContent = formatMoney(totalMes);
 
   const gruposSemana = agruparPorSemana(ocorrenciasParaExibir);
+  const [anoHoje, mesHoje] = hoje.split('-').map(Number);
+  const semanaHoje = semanaDoMes(hoje);
 
   cpListEl.innerHTML = gruposSemana.map((grupo) => {
+    const semanaAnteriorFundida = grupo.semanaFundida ? grupo.semana - 1 : grupo.semana;
+    const ehSemanaAtual = grupo.ano === anoHoje && grupo.mes === mesHoje
+      && semanaHoje >= semanaAnteriorFundida && semanaHoje <= grupo.semana;
+
     const itensHtml = grupo.itens.map(({ conta, data, valor, paga, atrasada }) => `
       <li class="lancamento-item${atrasada ? ' lancamento-atrasada' : ''}">
         <label class="lancamento-checkbox">
@@ -728,7 +734,9 @@ async function carregarContasPagar() {
 
     return `
       <li class="semana-grupo">
-        <span class="semana-grupo-titulo">${NOMES_MES[grupo.mes - 1]} — ${rotuloSemana}</span>
+        <span class="semana-grupo-titulo${ehSemanaAtual ? ' semana-atual' : ''}">
+          ${NOMES_MES[grupo.mes - 1]} — ${rotuloSemana}${ehSemanaAtual ? '<span class="semana-atual-dot"></span>' : ''}
+        </span>
         <ul class="lancamentos">${itensHtml}</ul>
       </li>
     `;
