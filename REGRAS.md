@@ -5,7 +5,8 @@ Não trata de stack, setup ou como rodar — só do que o sistema faz e por quê
 O objetivo é que essas regras não se percam com o tempo, já que boa parte
 delas não é óbvia lendo o código e nenhuma está registrada em outro lugar.
 
-Última revisão: 2026-09-13 (card de esta semana / próxima semana).
+Última revisão: 2026-09-13 (rótulos dinâmicos do card e correção do
+subtítulo de pago/total).
 
 ---
 
@@ -364,8 +365,8 @@ proposital: uma conta vencida não some da vista sozinha.
 O topo do módulo mostra dois números lado a lado, ambos representando
 **quanto falta pagar** (ocorrências não pagas):
 
-- **"Esta semana"** — em destaque, é o principal.
-- **"Próxima semana"** — ao lado, em cinza, secundário.
+- **Primeiro número** — em destaque, é o principal.
+- **Segundo número** — ao lado, em cinza, secundário.
 
 Abaixo, um subtítulo menor mostra o resumo do mês inteiro:
 
@@ -374,18 +375,36 @@ R$ X pago de R$ Y no mês
 ```
 
 ```
-X = soma das ocorrências do mês corrente que NÃO estão pagas
-Y = X + soma das ocorrências do mês corrente que ESTÃO pagas
+X = soma das ocorrências do mês corrente que ESTÃO pagas
+Y = X + soma das ocorrências do mês corrente que NÃO estão pagas
 ```
 
-#### "Esta semana" nem sempre é a semana do calendário
+O valor de X (pago) aparece em itálico e branco no subtítulo; o resto do
+texto fica na cor discreta padrão.
+
+#### O rótulo reflete a distância real de hoje — nunca mente
+
+Cada número tem um rótulo que muda conforme a distância real da semana
+mostrada até hoje:
+
+| Distância | Rótulo |
+|---|---|
+| 0 semanas | "Esta semana" |
+| 1 semana | "Próxima semana" |
+| 2+ semanas | "Em N semanas" |
+
+Isso existe porque, quando o card avança (ver abaixo), continuar chamando
+uma semana distante de "Esta semana" seria enganoso. O rótulo sempre diz a
+verdade sobre quão longe está o que ele mostra.
+
+#### Os dois números avançam quando não há pendência
 
 Se a semana que contém a data de hoje **não tiver nenhuma pendência** (tudo
-pago, ou nenhuma ocorrência cai nela), o card **avança** para a próxima
-semana que tiver algo pendente — e essa passa a ser chamada de "Esta
-semana" no card, mesmo não sendo literalmente a semana corrente do
-calendário. "Próxima semana" é sempre a semana seguinte a essa, buscada da
-mesma forma.
+pago, ou nenhuma ocorrência cai nela), o primeiro número **avança** para a
+próxima semana que tiver algo pendente. O segundo número é sempre a semana
+seguinte à do primeiro, buscada da mesma forma — então se o primeiro virou
+"Em 2 semanas", o segundo busca a partir da semana 3 e pode virar "Em 3
+semanas", "Em 4 semanas", etc.
 
 A busca avança semana a semana **sem limite** até achar pendência. Se todo
 o resto do mês (e o mês seguinte, e o seguinte…) estiver pago, o card
@@ -404,8 +423,8 @@ não a semana literal de hoje.
 #### O total do mês é independente
 
 O subtítulo (`R$ X pago de R$ Y no mês`) **não avança** — é sempre sobre o
-mês corrente, mesmo que "Esta semana" no card acima esteja mostrando uma
-semana de outro mês.
+mês corrente, mesmo que o card acima esteja mostrando uma semana de outro
+mês.
 
 Implicações que não são óbvias:
 

@@ -485,9 +485,12 @@ bloquearDuranteSubmit(salPagamentoForm, async (e) => {
 
 // ===================== CONTAS A PAGAR =====================
 
-const cpTotalMesEl = document.getElementById('cp-total-mes');
+const cpTotalMesPagoEl = document.getElementById('cp-total-mes-pago');
+const cpTotalMesGeralEl = document.getElementById('cp-total-mes-geral');
 const cpTotalSemanaAtualEl = document.getElementById('cp-total-semana-atual');
 const cpTotalProximaSemanaEl = document.getElementById('cp-total-proxima-semana');
+const cpLabelSemanaAtualEl = document.getElementById('cp-label-semana-atual');
+const cpLabelProximaSemanaEl = document.getElementById('cp-label-proxima-semana');
 const cpListEl = document.getElementById('cp-list');
 const cpContasListEl = document.getElementById('cp-contas-list');
 const cpForm = document.getElementById('cp-form');
@@ -646,9 +649,12 @@ async function carregarContasPagar() {
   if (contas.length === 0) {
     cpListEl.innerHTML = `<li class="empty-state">Nenhuma conta cadastrada.</li>`;
     cpContasListEl.innerHTML = `<li class="empty-state">Nenhuma conta cadastrada.</li>`;
-    cpTotalMesEl.textContent = `${formatMoney(0)} pago de ${formatMoney(0)} no mês`;
+    cpTotalMesPagoEl.textContent = formatMoney(0);
+    cpTotalMesGeralEl.textContent = formatMoney(0);
     cpTotalSemanaAtualEl.textContent = formatMoney(0);
     cpTotalProximaSemanaEl.textContent = formatMoney(0);
+    cpLabelSemanaAtualEl.textContent = 'Esta semana';
+    cpLabelProximaSemanaEl.textContent = 'Próxima semana';
     return;
   }
 
@@ -689,7 +695,8 @@ async function carregarContasPagar() {
 
   ocorrenciasParaExibir.sort((a, b) => a.data.localeCompare(b.data));
   const totalMesGeral = totalMesPago + totalMesNaoPago;
-  cpTotalMesEl.textContent = `${formatMoney(totalMesNaoPago)} pago de ${formatMoney(totalMesGeral)} no mês`;
+  cpTotalMesPagoEl.textContent = formatMoney(totalMesPago);
+  cpTotalMesGeralEl.textContent = formatMoney(totalMesGeral);
 
   const gruposSemanaTodos = agruparPorSemana(ocorrenciasParaExibir);
 
@@ -701,28 +708,38 @@ async function carregarContasPagar() {
     return pendentes.reduce((acc, i) => acc + i.valor, 0);
   }
 
-  // Acha a primeira semana (a partir de `dataRef`) que ainda tem alguma
-  // ocorrência não paga. Se a semana atual já está toda paga (ou vazia),
-  // avança semana a semana até achar uma com pendência — sem limite.
-  function acharSemanaComPendencia(dataRef) {
+  // Acha a primeira semana (a partir de `dataRef`, que já está `saltos`
+  // semanas à frente de hoje) que ainda tem alguma ocorrência não paga. Se
+  // a semana já está toda paga (ou vazia), avança semana a semana até
+  // achar uma com pendência — sem limite.
+  function acharSemanaComPendencia(dataRef, saltos) {
     while (true) {
       const [ano, mes] = dataRef.split('-').map(Number);
       const semana = semanaDoMes(dataRef);
       const total = totalPendenteDaSemana(ano, mes, semana);
 
       if (total !== null) {
-        return { ano, mes, semana, dataRef, total };
+        return { ano, mes, semana, dataRef, saltos, total };
       }
 
       dataRef = chaveSemanaSeguinte(dataRef).data;
+      saltos += 1;
     }
   }
 
-  const semanaAtual = acharSemanaComPendencia(hoje);
-  const proximaSemana = acharSemanaComPendencia(chaveSemanaSeguinte(semanaAtual.dataRef).data);
+  function rotuloDistanciaSemana(saltos) {
+    if (saltos === 0) return 'Esta semana';
+    if (saltos === 1) return 'Próxima semana';
+    return `Em ${saltos} semanas`;
+  }
+
+  const semanaAtual = acharSemanaComPendencia(hoje, 0);
+  const proximaSemana = acharSemanaComPendencia(chaveSemanaSeguinte(semanaAtual.dataRef).data, semanaAtual.saltos + 1);
 
   cpTotalSemanaAtualEl.textContent = formatMoney(semanaAtual.total);
   cpTotalProximaSemanaEl.textContent = formatMoney(proximaSemana.total);
+  cpLabelSemanaAtualEl.textContent = rotuloDistanciaSemana(semanaAtual.saltos);
+  cpLabelProximaSemanaEl.textContent = rotuloDistanciaSemana(proximaSemana.saltos);
 
   const anoHoje = semanaAtual.ano;
   const mesHoje = semanaAtual.mes;

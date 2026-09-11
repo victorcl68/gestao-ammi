@@ -300,6 +300,11 @@ button[type="submit"]:disabled {
   color: var(--text-muted);
 }
 
+.balance-subtitulo-destaque {
+  font-style: italic;
+  color: var(--text);
+}
+
 /* Switch toggle (Entrada/Saída, Vendas Hoje/Pagamento) */
 .switch-toggle {
   position: relative;
