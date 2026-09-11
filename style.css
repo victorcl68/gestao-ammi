@@ -447,13 +447,20 @@ button[type="submit"]:disabled {
 .semana-grupo-titulo {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 10px;
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
   margin-bottom: 8px;
+}
+
+.semana-grupo-titulo > span:first-child {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .semana-grupo-titulo.semana-atual {
@@ -466,6 +473,11 @@ button[type="submit"]:disabled {
   border-radius: 50%;
   background: var(--primary);
   flex-shrink: 0;
+}
+
+.semana-grupo-total {
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .lancamento-item {

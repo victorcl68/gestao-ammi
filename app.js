@@ -764,11 +764,13 @@ async function carregarContasPagar() {
       const rotuloSemana = grupo.semanaFundida
         ? `Semana ${grupo.semana - 1}-${grupo.semana}`
         : `Semana ${grupo.semana}`;
+      const totalGrupo = grupo.itens.reduce((acc, item) => acc + item.valor, 0);
 
       return `
         <li class="semana-grupo">
           <span class="semana-grupo-titulo${ehSemanaAtual ? ' semana-atual' : ''}">
-            ${NOMES_MES[grupo.mes - 1]} — ${rotuloSemana}${ehSemanaAtual ? '<span class="semana-atual-dot"></span>' : ''}
+            <span>${NOMES_MES[grupo.mes - 1]} — ${rotuloSemana}${ehSemanaAtual ? '<span class="semana-atual-dot"></span>' : ''}</span>
+            <span class="semana-grupo-total">${formatMoney(totalGrupo)}</span>
           </span>
           <ul class="lancamentos">${itensHtml}</ul>
         </li>
