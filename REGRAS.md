@@ -5,7 +5,7 @@ Não trata de stack, setup ou como rodar — só do que o sistema faz e por quê
 O objetivo é que essas regras não se percam com o tempo, já que boa parte
 delas não é óbvia lendo o código e nenhuma está registrada em outro lugar.
 
-Última revisão: 2026-09-13 (Fiado sem telefone, formulário reordenado).
+Última revisão: 2026-09-12 (pagamentos parciais no Fiado).
 
 ---
 
@@ -478,25 +478,24 @@ não pago — é o total do que está programado para aquela semana.
 
 ## Módulo: Fiado
 
-Registro de vendas fiadas por pessoa. É o módulo mais simples do sistema —
-**não tem nenhuma regra de negócio complexa de propósito**. Existe só para
-documentar quem deve o quê, sem controle de pagamento, sem cálculo, sem
-recorrência.
+Registro de vendas fiadas e pagamentos por pessoa. Existe para documentar
+quem deve, o que foi vendido e os abatimentos realizados ao longo do tempo.
 
 ### Sem ligação com nada
 
-Fiado não se comunica com nenhum outro módulo, nem entre si (não há
-conceito de "pagamento" que abata o saldo). Uma venda fiada, uma vez
-lançada, fica registrada para sempre até ser removida manualmente. Isso é
-proposital: o objetivo é ter um histórico do que foi vendido fiado, não um
-sistema de cobrança.
+Fiado não se comunica com nenhum outro módulo. Registrar um pagamento não
+movimenta Caixa Casa nem Salário; ele apenas reduz o saldo devido pela pessoa
+dentro do próprio Fiado.
 
 ### Pessoa e vendas
 
 Uma pessoa (`fiado_pessoas`: só o nome) tem zero ou mais vendas
-(`fiado_vendas`: valor, descrição dos itens, data). O **saldo devido de
-uma pessoa é sempre a soma de todas as suas vendas** — não existe
-subtração de nada.
+(`fiado_vendas`: valor, descrição dos itens, data) e pagamentos
+(`fiado_pagamentos`: valor, descrição, data). O saldo devido é:
+
+```
+saldo da pessoa = soma das vendas − soma dos pagamentos
+```
 
 #### Reaproveitamento de pessoa pelo nome
 
@@ -512,17 +511,36 @@ Não há tela separada de "cadastrar pessoa" — pessoa e primeira venda nascem
 juntas, no mesmo formulário. Não há nenhum outro dado da pessoa além do
 nome (sem telefone, endereço, etc.) — o cadastro é deliberadamente mínimo.
 
+### Pagamentos
+
+O formulário possui as abas **Venda** e **Pagamento**. Ao registrar um
+pagamento, é obrigatório selecionar uma pessoa já cadastrada. A seleção usa
+o identificador da pessoa, não apenas o nome, para que o pagamento não seja
+associado ao cadastro errado caso existam nomes repetidos. Um pagamento nunca
+cria uma pessoa nova.
+
+Pagamentos podem ser parciais e ficam misturados às vendas no histórico da
+pessoa, ordenados por data. O valor do pagamento deve ser positivo e não pode
+ultrapassar o saldo atual da pessoa; portanto, o Fiado não registra crédito
+adiantado nem deixa o saldo negativo.
+
+A descrição do pagamento é opcional e usa `Pagamento` como padrão.
+
 ### Total geral
 
-O card do topo (`Total fiado`) soma o saldo devido de **todas** as
-pessoas — é a soma de tudo que está fiado no momento, sem filtro de data.
+O card do topo (`Total fiado`) soma o saldo devido de **todas** as pessoas:
+soma das vendas menos soma dos pagamentos, sem filtro de data.
 
 ### Exclusão
 
-- Remover uma **venda** apaga só aquela linha.
+- Remover uma **venda** apaga só aquela linha, desde que as vendas restantes
+  ainda cubram todos os pagamentos registrados. Caso contrário, a remoção é
+  bloqueada até que o pagamento necessário seja removido.
+- Remover um **pagamento** apaga só aquela linha e devolve o valor ao saldo
+  devido da pessoa.
 - Remover uma **pessoa** apaga, em cascata (`on delete cascade`), todo o
-  seu histórico de vendas — sem confirmação extra além do `confirm()` do
-  navegador, e sem possibilidade de desfazer.
+  seu histórico de vendas e pagamentos — sem confirmação extra além do
+  `confirm()` do navegador, e sem possibilidade de desfazer.
 
 ---
 

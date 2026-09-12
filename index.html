@@ -58,7 +58,7 @@
       </button>
       <button class="menu-card" data-nav="fiado">
         <span class="menu-title">Fiado</span>
-        <span class="menu-sub">Vendas fiadas por pessoa</span>
+        <span class="menu-sub">Vendas e pagamentos por pessoa</span>
       </button>
     </nav>
   </main>
@@ -262,24 +262,53 @@
         <span id="fi-total" class="balance-value">R$ 0,00</span>
       </section>
 
-      <form id="fi-form" class="card">
-        <label for="fi-valor">Valor</label>
-        <input type="text" id="fi-valor" inputmode="decimal" placeholder="0,00" required>
+      <div class="switch-toggle tabs-switch">
+        <input type="radio" name="fi-tab" id="fi-tab-venda" checked>
+        <label for="fi-tab-venda" class="tab-btn" data-tab="venda">Venda</label>
+        <input type="radio" name="fi-tab" id="fi-tab-pagamento">
+        <label for="fi-tab-pagamento" class="tab-btn" data-tab="pagamento">Pagamento</label>
+        <span class="switch-thumb"></span>
+      </div>
 
-        <label for="fi-data">Data</label>
-        <input type="date" id="fi-data" required>
+      <div class="tab-panels">
+        <form id="fi-form" class="card tab-panel tab-panel-active" data-panel="venda">
+          <label for="fi-valor">Valor</label>
+          <input type="text" id="fi-valor" inputmode="decimal" placeholder="0,00" required>
 
-        <label for="fi-descricao">Descrição</label>
-        <input type="text" id="fi-descricao" placeholder="Ex: 2 papéis higiênicos">
+          <label for="fi-data">Data</label>
+          <input type="date" id="fi-data" required>
 
-        <label for="fi-pessoa">Pessoa</label>
-        <input type="text" id="fi-pessoa" list="fi-pessoas-datalist" placeholder="Nome da pessoa" required
-          autocomplete="off">
-        <datalist id="fi-pessoas-datalist"></datalist>
+          <label for="fi-descricao">Descrição</label>
+          <input type="text" id="fi-descricao" placeholder="Ex: 2 papéis higiênicos">
 
-        <button type="submit">Salvar</button>
-        <p id="fi-form-error" class="error" hidden></p>
-      </form>
+          <label for="fi-pessoa">Pessoa</label>
+          <input type="text" id="fi-pessoa" list="fi-pessoas-datalist" placeholder="Nome da pessoa" required
+            autocomplete="off">
+
+          <button type="submit">Salvar</button>
+          <p id="fi-form-error" class="error" hidden></p>
+        </form>
+
+        <form id="fi-pagamento-form" class="card tab-panel" data-panel="pagamento">
+          <label for="fi-pagamento-valor">Valor</label>
+          <input type="text" id="fi-pagamento-valor" inputmode="decimal" placeholder="0,00" required>
+
+          <label for="fi-pagamento-data">Data</label>
+          <input type="date" id="fi-pagamento-data" required>
+
+          <label for="fi-pagamento-descricao">Descrição</label>
+          <input type="text" id="fi-pagamento-descricao" placeholder="Pagamento" value="Pagamento">
+
+          <label for="fi-pagamento-pessoa">Pessoa</label>
+          <select id="fi-pagamento-pessoa" required>
+            <option value="">Escolha a pessoa</option>
+          </select>
+
+          <button type="submit">Salvar</button>
+          <p id="fi-pagamento-form-error" class="error" hidden></p>
+        </form>
+      </div>
+      <datalist id="fi-pessoas-datalist"></datalist>
 
       <details class="list">
         <summary>Pessoas</summary>

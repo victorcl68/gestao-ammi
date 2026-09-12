@@ -16,6 +16,7 @@ const CP_PAGAMENTOS_TABLE = 'contas_pagar_pagamentos';
 const CP_AJUSTES_TABLE = 'contas_pagar_ajustes';
 const FI_PESSOAS_TABLE = 'fiado_pessoas';
 const FI_VENDAS_TABLE = 'fiado_vendas';
+const FI_PAGAMENTOS_TABLE = 'fiado_pagamentos';
 const PERCENTUAL_COMISSAO = 0.25;
 
 // ===================== HELPERS: dinheiro / data =====================
@@ -355,7 +356,7 @@ aplicarMascaraMoney(salPagamentoValorInput);
 document.querySelectorAll('.tab-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
     const tab = btn.dataset.tab;
-    document.querySelectorAll('.tab-panel').forEach((panel) => {
+    btn.closest('.panel').querySelectorAll('.tab-panel').forEach((panel) => {
       panel.classList.toggle('tab-panel-active', panel.dataset.panel === tab);
     });
   });
@@ -974,17 +975,30 @@ const fiPessoasDatalistEl = document.getElementById('fi-pessoas-datalist');
 const fiValorInput = document.getElementById('fi-valor');
 const fiDataInput = document.getElementById('fi-data');
 const fiDescricaoInput = document.getElementById('fi-descricao');
+const fiPagamentoForm = document.getElementById('fi-pagamento-form');
+const fiPagamentoErrorEl = document.getElementById('fi-pagamento-form-error');
+const fiPagamentoPessoaSelect = document.getElementById('fi-pagamento-pessoa');
+const fiPagamentoValorInput = document.getElementById('fi-pagamento-valor');
+const fiPagamentoDataInput = document.getElementById('fi-pagamento-data');
+const fiPagamentoDescricaoInput = document.getElementById('fi-pagamento-descricao');
 aplicarMascaraMoney(fiValorInput);
+aplicarMascaraMoney(fiPagamentoValorInput);
 
 async function carregarFiado() {
   fiDataInput.value = fiDataInput.value || hojeISO();
+  fiPagamentoDataInput.value = fiPagamentoDataInput.value || hojeISO();
 
-  const [{ data: pessoas, error: errPessoas }, { data: vendas, error: errVendas }] = await Promise.all([
+  const [
+    { data: pessoas, error: errPessoas },
+    { data: vendas, error: errVendas },
+    { data: pagamentos, error: errPagamentos },
+  ] = await Promise.all([
     supabase.from(FI_PESSOAS_TABLE).select('*').order('nome', { ascending: true }),
     supabase.from(FI_VENDAS_TABLE).select('*').order('data', { ascending: false }).order('created_at', { ascending: false }),
+    supabase.from(FI_PAGAMENTOS_TABLE).select('*').order('data', { ascending: false }).order('created_at', { ascending: false }),
   ]);
 
-  if (errPessoas || errVendas) {
+  if (errPessoas || errVendas || errPagamentos) {
     fiListEl.innerHTML = `<li class="empty-state">Erro ao carregar fiado.</li>`;
     return;
   }
@@ -994,40 +1008,71 @@ async function carregarFiado() {
   if (pessoas.length === 0) {
     fiListEl.innerHTML = `<li class="empty-state">Nenhuma pessoa cadastrada.</li>`;
     fiTotalEl.textContent = formatMoney(0);
+    fiPagamentoPessoaSelect.innerHTML = `<option value="">Nenhuma pessoa cadastrada</option>`;
     return;
   }
+
+  const saldosPorPessoa = new Map(pessoas.map((pessoa) => {
+    const totalVendas = vendas
+      .filter((venda) => venda.pessoa_id === pessoa.id)
+      .reduce((acc, venda) => acc + Number(venda.valor), 0);
+    const totalPagamentos = pagamentos
+      .filter((pagamento) => pagamento.pessoa_id === pessoa.id)
+      .reduce((acc, pagamento) => acc + Number(pagamento.valor), 0);
+    return [pessoa.id, round2(totalVendas - totalPagamentos)];
+  }));
+
+  const pessoaSelecionada = fiPagamentoPessoaSelect.value;
+  fiPagamentoPessoaSelect.innerHTML = `
+    <option value="">Escolha a pessoa</option>
+    ${pessoas.map((pessoa) => `<option value="${pessoa.id}">${pessoa.nome} — ${formatMoney(saldosPorPessoa.get(pessoa.id))}</option>`).join('')}
+  `;
+  fiPagamentoPessoaSelect.value = pessoaSelecionada;
 
   let totalGeral = 0;
 
   fiListEl.innerHTML = pessoas.map((pessoa) => {
     const vendasDaPessoa = vendas.filter((v) => v.pessoa_id === pessoa.id);
-    const totalPessoa = vendasDaPessoa.reduce((acc, v) => acc + Number(v.valor), 0);
-    totalGeral += totalPessoa;
+    const pagamentosDaPessoa = pagamentos.filter((p) => p.pessoa_id === pessoa.id);
+    const saldoPessoa = saldosPorPessoa.get(pessoa.id);
+    totalGeral += saldoPessoa;
 
-    const vendasHtml = vendasDaPessoa.length === 0
-      ? `<li class="empty-state">Nenhuma venda ainda.</li>`
-      : vendasDaPessoa.map((v) => `
+    const lancamentos = [
+      ...vendasDaPessoa.map((v) => ({ ...v, tipo: 'venda' })),
+      ...pagamentosDaPessoa.map((p) => ({ ...p, tipo: 'pagamento' })),
+    ].sort((a, b) => b.data.localeCompare(a.data) || b.created_at.localeCompare(a.created_at));
+
+    const lancamentosHtml = lancamentos.length === 0
+      ? `<li class="empty-state">Nenhum lançamento ainda.</li>`
+      : lancamentos.map((lancamento) => {
+        const pagamento = lancamento.tipo === 'pagamento';
+        const descricao = lancamento.descricao || (pagamento ? 'Pagamento' : 'Sem descrição');
+        const classeBotao = pagamento ? 'fi-remover-pagamento-btn' : 'fi-remover-venda-btn';
+        const atributoId = pagamento ? 'data-pagamento-id' : 'data-venda-id';
+        const rotuloRemover = pagamento ? 'Remover pagamento' : 'Remover venda';
+        return `
         <li class="lancamento-item">
           <div class="lancamento-info">
-            <span class="lancamento-desc">${v.descricao || 'Sem descrição'}</span>
-            <span class="lancamento-data">${formatDataBR(v.data)}</span>
+            <span class="lancamento-desc">${descricao}</span>
+            <span class="lancamento-data">${formatDataBR(lancamento.data)}</span>
           </div>
-          <span class="lancamento-valor negativo">${formatMoney(v.valor)}</span>
-          <button type="button" class="btn-icon fi-remover-venda-btn" data-venda-id="${v.id}" aria-label="Remover venda" title="Remover venda">
+          <span class="lancamento-valor ${pagamento ? 'positivo' : 'negativo'}">${pagamento ? '− ' : ''}${formatMoney(lancamento.valor)}</span>
+          <button type="button" class="btn-icon ${classeBotao}" ${atributoId}="${lancamento.id}" aria-label="${rotuloRemover}" title="${rotuloRemover}">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"></line>
               <line x1="6" y1="6" x2="18" y2="18"></line>
             </svg>
           </button>
         </li>
-      `).join('');
+      `;
+      }).join('');
 
     return `
       <li class="semana-grupo">
         <details class="fi-pessoa-details">
           <summary class="fi-pessoa-summary">
             <span class="fi-pessoa-nome">${pessoa.nome}</span>
-            <span class="lancamento-valor negativo">${formatMoney(totalPessoa)}</span>
+            <span class="lancamento-valor ${saldoPessoa > 0 ? 'negativo' : 'positivo'}">${formatMoney(saldoPessoa)}</span>
             <button type="button" class="btn-icon fi-remover-pessoa-btn" data-pessoa-id="${pessoa.id}" aria-label="Remover pessoa" title="Remover pessoa">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="3 6 5 6 21 6"></polyline>
@@ -1035,19 +1080,63 @@ async function carregarFiado() {
               </svg>
             </button>
           </summary>
-          <ul class="lancamentos">${vendasHtml}</ul>
+          <ul class="lancamentos">${lancamentosHtml}</ul>
         </details>
       </li>
     `;
   }).join('');
 
-  fiTotalEl.textContent = formatMoney(totalGeral);
+  fiTotalEl.textContent = formatMoney(round2(totalGeral));
 }
 
 fiListEl.addEventListener('click', async (e) => {
   const removerVendaBtn = e.target.closest('.fi-remover-venda-btn');
   if (removerVendaBtn) {
-    await supabase.from(FI_VENDAS_TABLE).delete().eq('id', removerVendaBtn.dataset.vendaId);
+    const { data: venda, error: errVenda } = await supabase
+      .from(FI_VENDAS_TABLE)
+      .select('pessoa_id, valor')
+      .eq('id', removerVendaBtn.dataset.vendaId)
+      .single();
+
+    if (errVenda) {
+      alert('Erro ao conferir a venda. Tente novamente.');
+      return;
+    }
+
+    const [{ data: vendas, error: errVendas }, { data: pagamentos, error: errPagamentos }] = await Promise.all([
+      supabase.from(FI_VENDAS_TABLE).select('valor').eq('pessoa_id', venda.pessoa_id),
+      supabase.from(FI_PAGAMENTOS_TABLE).select('valor').eq('pessoa_id', venda.pessoa_id),
+    ]);
+
+    if (errVendas || errPagamentos) {
+      alert('Erro ao conferir o saldo. Tente novamente.');
+      return;
+    }
+
+    const totalVendasRestantes = round2(
+      vendas.reduce((acc, item) => acc + Number(item.valor), 0) - Number(venda.valor)
+    );
+    const totalPagamentos = round2(
+      pagamentos.reduce((acc, pagamento) => acc + Number(pagamento.valor), 0)
+    );
+
+    if (totalVendasRestantes < totalPagamentos) {
+      alert('Não é possível remover esta venda porque há pagamentos vinculados ao saldo. Remova primeiro o pagamento necessário.');
+      return;
+    }
+
+    const { error } = await supabase.from(FI_VENDAS_TABLE).delete().eq('id', removerVendaBtn.dataset.vendaId);
+    if (error) {
+      alert('Erro ao remover a venda. Tente novamente.');
+      return;
+    }
+    await carregarFiado();
+    return;
+  }
+
+  const removerPagamentoBtn = e.target.closest('.fi-remover-pagamento-btn');
+  if (removerPagamentoBtn) {
+    await supabase.from(FI_PAGAMENTOS_TABLE).delete().eq('id', removerPagamentoBtn.dataset.pagamentoId);
     await carregarFiado();
     return;
   }
@@ -1055,7 +1144,7 @@ fiListEl.addEventListener('click', async (e) => {
   const removerPessoaBtn = e.target.closest('.fi-remover-pessoa-btn');
   if (removerPessoaBtn) {
     e.preventDefault();
-    if (!confirm('Remover esta pessoa e todo o seu histórico de vendas fiadas?')) return;
+    if (!confirm('Remover esta pessoa e todo o seu histórico de vendas e pagamentos?')) return;
     await supabase.from(FI_PESSOAS_TABLE).delete().eq('id', removerPessoaBtn.dataset.pessoaId);
     await carregarFiado();
   }
@@ -1125,6 +1214,67 @@ bloquearDuranteSubmit(fiForm, async (e) => {
 
   fiForm.reset();
   fiDataInput.value = hojeISO();
+  await carregarFiado();
+});
+
+bloquearDuranteSubmit(fiPagamentoForm, async (e) => {
+  e.preventDefault();
+  fiPagamentoErrorEl.hidden = true;
+
+  const pessoaId = fiPagamentoPessoaSelect.value;
+  const valor = parseMoney(fiPagamentoValorInput.value);
+  const data = fiPagamentoDataInput.value;
+  const descricao = fiPagamentoDescricaoInput.value.trim() || 'Pagamento';
+
+  if (!pessoaId) {
+    fiPagamentoErrorEl.textContent = 'Escolha a pessoa que realizou o pagamento.';
+    fiPagamentoErrorEl.hidden = false;
+    return;
+  }
+
+  if (!valor || valor <= 0) {
+    fiPagamentoErrorEl.textContent = 'Informe um valor válido.';
+    fiPagamentoErrorEl.hidden = false;
+    return;
+  }
+
+  const [{ data: vendas, error: errVendas }, { data: pagamentos, error: errPagamentos }] = await Promise.all([
+    supabase.from(FI_VENDAS_TABLE).select('valor').eq('pessoa_id', pessoaId),
+    supabase.from(FI_PAGAMENTOS_TABLE).select('valor').eq('pessoa_id', pessoaId),
+  ]);
+
+  if (errVendas || errPagamentos) {
+    fiPagamentoErrorEl.textContent = 'Erro ao conferir o saldo. Tente novamente.';
+    fiPagamentoErrorEl.hidden = false;
+    return;
+  }
+
+  const totalVendas = vendas.reduce((acc, venda) => acc + Number(venda.valor), 0);
+  const totalPagamentos = pagamentos.reduce((acc, pagamento) => acc + Number(pagamento.valor), 0);
+  const saldoPessoa = round2(totalVendas - totalPagamentos);
+
+  if (valor > saldoPessoa) {
+    fiPagamentoErrorEl.textContent = `O pagamento não pode ultrapassar o saldo de ${formatMoney(saldoPessoa)}.`;
+    fiPagamentoErrorEl.hidden = false;
+    return;
+  }
+
+  const { error } = await supabase.from(FI_PAGAMENTOS_TABLE).insert({
+    pessoa_id: pessoaId,
+    valor,
+    data,
+    descricao,
+  });
+
+  if (error) {
+    fiPagamentoErrorEl.textContent = 'Erro ao salvar. Tente novamente.';
+    fiPagamentoErrorEl.hidden = false;
+    return;
+  }
+
+  fiPagamentoForm.reset();
+  fiPagamentoDataInput.value = hojeISO();
+  fiPagamentoDescricaoInput.value = 'Pagamento';
   await carregarFiado();
 });
 

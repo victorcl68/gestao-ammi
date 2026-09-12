@@ -150,7 +150,8 @@ label {
 input[type="email"],
 input[type="password"],
 input[type="text"],
-input[type="date"] {
+input[type="date"],
+select {
   width: 100%;
   padding: 12px;
   font-size: 16px;
@@ -663,7 +664,6 @@ button[type="submit"]:disabled {
     position: relative;
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    grid-template-rows: auto auto 44px 430px 1fr;
     gap: 24px;
     max-width: 1600px;
     margin: 0 auto;
@@ -680,9 +680,9 @@ button[type="submit"]:disabled {
 
   .desktop-grid .panel {
     display: grid !important;
-    grid-template-rows: subgrid;
-    grid-row: 1 / 6;
+    grid-template-rows: auto minmax(140px, auto) 44px minmax(430px, auto) auto;
     row-gap: 16px;
+    align-self: start;
     max-width: none;
     margin: 0;
     padding: 0;
@@ -722,6 +722,10 @@ button[type="submit"]:disabled {
 
   .desktop-grid .panel .card button[type="submit"] {
     margin-top: auto;
+  }
+
+  #cp-descricao {
+    margin-bottom: 20px;
   }
 
   .desktop-grid .panel .tab-panels {
