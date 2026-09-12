@@ -288,14 +288,18 @@ button[type="submit"]:disabled {
   order: 2;
 }
 
+#cp-label-semana-atual {
+  color: var(--text);
+}
+
 .balance-value-secundario {
-  font-size: 22px;
-  font-weight: 600;
+  font-size: 32px;
+  font-weight: 700;
   color: var(--text-muted);
 }
 
 .balance-subtitulo {
-  margin-top: 10px;
+  margin-bottom: 10px;
   font-size: 13px;
   color: var(--text-muted);
 }
@@ -366,6 +370,7 @@ button[type="submit"]:disabled {
 }
 
 .label-com-switch {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -378,6 +383,9 @@ button[type="submit"]:disabled {
 }
 
 .switch-toggle-mini {
+  position: absolute;
+  right: 0;
+  bottom: 0;
   padding: 2px;
   margin-bottom: 0;
 }
