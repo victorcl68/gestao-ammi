@@ -5,7 +5,7 @@ Não trata de stack, setup ou como rodar — só do que o sistema faz e por quê
 O objetivo é que essas regras não se percam com o tempo, já que boa parte
 delas não é óbvia lendo o código e nenhuma está registrada em outro lugar.
 
-Última revisão: 2026-09-12 (pagamentos parciais no Fiado).
+Última revisão: 2026-09-14 (abatimento do Caixa Casa no primeiro aluguel aberto).
 
 ---
 
@@ -31,15 +31,15 @@ delas não é óbvia lendo o código e nenhuma está registrada em outro lugar.
 
 ## Conceitos gerais
 
-### Os três módulos são independentes
+### Integração entre Caixa Casa e Contas a Pagar
 
-Caixa Casa, Salário e Contas a Pagar **não se comunicam**. Não existe
-transferência entre eles, nem saldo consolidado. São três controles
-separados que por acaso vivem na mesma tela.
+Salário continua independente dos demais módulos. Caixa Casa e Contas a
+Pagar se comunicam somente na exibição do primeiro aluguel aberto, conforme
+a regra documentada em [Abatimento do Caixa Casa no aluguel](#abatimento-do-caixa-casa-no-aluguel).
 
-Consequência prática: pagar uma conta em Contas a Pagar **não** debita
-nada do Caixa Casa. Se esse dinheiro saiu do caixa de casa, o lançamento
-tem que ser feito manualmente nos dois lugares.
+Pagar uma conta em Contas a Pagar **não** cria um débito no Caixa Casa. O
+abatimento do aluguel é apenas uma projeção visual do valor que ainda falta;
+os lançamentos continuam sendo feitos manualmente em cada módulo.
 
 ### Dinheiro
 
@@ -119,6 +119,16 @@ Calculado **sobre os lançamentos carregados**, que são os 50 mais recentes
 
 Saldo negativo é exibido em vermelho. Não há bloqueio para saldo negativo —
 o sistema registra o que aconteceu, não impede lançamentos.
+
+O card mostra dois valores:
+
+- **Após aluguel** — valor principal, calculado como
+  `max(saldo − primeiro aluguel aberto, 0)`.
+- **Total no caixa** — valor secundário, mostra o saldo original sem o
+  abatimento do aluguel.
+
+O aluguel usado nessa projeção segue a mesma definição de primeiro aluguel
+aberto do módulo Contas a Pagar. O cálculo não cria saída no Caixa Casa.
 
 ---
 
@@ -359,6 +369,26 @@ Elas continuam aparecendo indefinidamente até serem pagas ou puladas. É
 proposital: uma conta vencida não some da vista sozinha.
 
 ---
+
+### Abatimento do Caixa Casa no aluguel
+
+A primeira ocorrência não paga, em ordem de data, cuja descrição da conta
+seja exatamente `Aluguel` (sem diferenciar maiúsculas de minúsculas) recebe
+um abatimento igual ao saldo positivo do Caixa Casa. O valor exibido nunca
+fica abaixo de zero:
+
+```
+aluguel_exibido = max(valor_do_aluguel − saldo_do_caixa, 0)
+```
+
+Esse valor líquido aparece na linha da ocorrência e no total do seu bloco de
+semana. Se a mesma semana estiver em um dos dois números do card do topo, o
+card também usa o valor líquido. Quando o primeiro aluguel aberto pertence ao
+mês corrente, o resumo mensal também usa o valor líquido.
+
+O saldo do Caixa Casa usado no abatimento segue a regra atual do módulo: é
+calculado sobre os 50 lançamentos mais recentes. Nenhum lançamento é criado
+ou alterado automaticamente por esse abatimento.
 
 ### Card do topo: esta semana e a próxima
 

@@ -94,6 +94,10 @@ body {
   color: var(--text-muted);
 }
 
+.btn-inicio {
+  color: var(--primary);
+}
+
 .card {
   background: var(--card-bg);
   border-radius: var(--radius);
@@ -268,7 +272,8 @@ button[type="submit"]:disabled {
   margin-top: 4px;
 }
 
-.balance-value.negative {
+.balance-value.negative,
+.balance-value-secundario.negative {
   color: var(--danger);
 }
 

@@ -219,6 +219,7 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
 // ===================== CAIXA CASA =====================
 
 const ccSaldoEl = document.getElementById('cc-saldo');
+const ccSaldoTotalEl = document.getElementById('cc-saldo-total');
 const ccListEl = document.getElementById('cc-list');
 const ccForm = document.getElementById('cc-form');
 const ccErrorEl = document.getElementById('cc-form-error');
@@ -254,14 +255,27 @@ async function carregarCaixaCasa() {
   }
   updateCcDescricaoRequirement();
 
-  const { data, error } = await supabase
-    .from(CC_TABLE)
-    .select('*')
-    .order('data', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(50);
+  const [
+    { data, error },
+    { data: contas, error: errContas },
+    { data: exdatesRows, error: errEx },
+    { data: parcelasRows, error: errParc },
+    { data: pagos, error: errPag },
+    { data: ajustesRows, error: errAjustes },
+  ] = await Promise.all([
+    supabase.from(CC_TABLE)
+      .select('*')
+      .order('data', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(50),
+    supabase.from(CP_TABLE).select('*').order('data_inicio', { ascending: true }),
+    supabase.from(CP_EXDATES_TABLE).select('*'),
+    supabase.from(CP_PARCELAS_TABLE).select('*'),
+    supabase.from(CP_PAGAMENTOS_TABLE).select('*'),
+    supabase.from(CP_AJUSTES_TABLE).select('*'),
+  ]);
 
-  if (error) {
+  if (error || errContas || errEx || errParc || errPag || errAjustes) {
     ccListEl.innerHTML = `<li class="empty-state">Erro ao carregar lançamentos.</li>`;
     return;
   }
@@ -269,8 +283,11 @@ async function carregarCaixaCasa() {
   const saldo = data.reduce((acc, l) => {
     return acc + (l.tipo === 'entrada' ? Number(l.valor) : -Number(l.valor));
   }, 0);
-  ccSaldoEl.textContent = formatMoney(saldo);
-  ccSaldoEl.classList.toggle('negative', saldo < 0);
+  const aluguelAberto = encontrarPrimeiroAluguelAberto(contas, exdatesRows, parcelasRows, pagos, ajustesRows);
+  const saldoAposAluguel = Math.max(round2(saldo - (aluguelAberto?.valor || 0)), 0);
+  ccSaldoEl.textContent = formatMoney(saldoAposAluguel);
+  ccSaldoTotalEl.textContent = formatMoney(saldo);
+  ccSaldoTotalEl.classList.toggle('negative', saldo < 0);
 
   if (data.length === 0) {
     ccListEl.innerHTML = `<li class="empty-state">Nenhum lançamento ainda.</li>`;
@@ -331,6 +348,7 @@ bloquearDuranteSubmit(ccForm, async (e) => {
   ccDescricaoInput.value = CC_DESCRICAO_PADRAO[tipo];
   updateCcDescricaoRequirement();
   await carregarCaixaCasa();
+  await carregarContasPagar();
 });
 
 // ===================== SALÁRIO =====================
@@ -624,6 +642,37 @@ function gerarOcorrenciasRecorrenteParaExibir(conta, exdates, pagosSet, qtdeFutu
   return [...atrasadas, ...futuras];
 }
 
+function encontrarPrimeiroAluguelAberto(contas, exdatesRows, parcelasRows, pagos, ajustesRows) {
+  const pagosSet = new Set(pagos.map((pagamento) => `${pagamento.conta_id}|${pagamento.data}`));
+  const ajustesMap = new Map(ajustesRows.map((ajuste) => [`${ajuste.conta_id}|${ajuste.data}`, Number(ajuste.valor)]));
+  const alugueisAbertos = [];
+
+  contas.filter((conta) => conta.descricao.trim().toLocaleLowerCase('pt-BR') === 'aluguel').forEach((conta) => {
+    let ocorrencias;
+    if (conta.tipo === 'parcelado') {
+      ocorrencias = parcelasRows
+        .filter((parcela) => parcela.conta_id === conta.id)
+        .map((parcela) => ({ data: parcela.data, valor: Number(parcela.valor) }));
+    } else {
+      const exdates = new Set(
+        exdatesRows.filter((exdate) => exdate.conta_id === conta.id).map((exdate) => exdate.data)
+      );
+      ocorrencias = gerarOcorrenciasRecorrenteParaExibir(conta, exdates, pagosSet, pagos.length + 1)
+        .map((data) => ({
+          data,
+          valor: ajustesMap.get(`${conta.id}|${data}`) ?? Number(conta.valor),
+        }));
+    }
+
+    ocorrencias.filter(({ data }) => !pagosSet.has(`${conta.id}|${data}`)).forEach((ocorrencia) => {
+      alugueisAbertos.push(ocorrencia);
+    });
+  });
+
+  alugueisAbertos.sort((a, b) => a.data.localeCompare(b.data));
+  return alugueisAbertos[0] || null;
+}
+
 async function carregarContasPagar() {
   cpDataInicioInput.value = cpDataInicioInput.value || hojeISO();
 
@@ -633,15 +682,21 @@ async function carregarContasPagar() {
     { data: parcelasRows, error: errParc },
     { data: pagos, error: errPag },
     { data: ajustesRows, error: errAjustes },
+    { data: caixaRows, error: errCaixa },
   ] = await Promise.all([
     supabase.from(CP_TABLE).select('*').order('data_inicio', { ascending: true }),
     supabase.from(CP_EXDATES_TABLE).select('*'),
     supabase.from(CP_PARCELAS_TABLE).select('*'),
     supabase.from(CP_PAGAMENTOS_TABLE).select('*'),
     supabase.from(CP_AJUSTES_TABLE).select('*'),
+    supabase.from(CC_TABLE)
+      .select('tipo, valor')
+      .order('data', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(50),
   ]);
 
-  if (errContas || errEx || errParc || errPag || errAjustes) {
+  if (errContas || errEx || errParc || errPag || errAjustes || errCaixa) {
     cpListEl.innerHTML = `<li class="empty-state">Erro ao carregar contas a pagar.</li>`;
     cpContasListEl.innerHTML = '';
     return;
@@ -650,6 +705,14 @@ async function carregarContasPagar() {
   const ajustesMap = new Map(ajustesRows.map((a) => [`${a.conta_id}|${a.data}`, Number(a.valor)]));
 
   const pagosSet = new Set(pagos.map((p) => `${p.conta_id}|${p.data}`));
+  const saldoCaixa = caixaRows.reduce((acc, lancamento) => {
+    return acc + (lancamento.tipo === 'entrada' ? Number(lancamento.valor) : -Number(lancamento.valor));
+  }, 0);
+  const aluguelAbertoCaixa = encontrarPrimeiroAluguelAberto(contas, exdatesRows, parcelasRows, pagos, ajustesRows);
+  const saldoAposAluguel = Math.max(round2(saldoCaixa - (aluguelAbertoCaixa?.valor || 0)), 0);
+  ccSaldoEl.textContent = formatMoney(saldoAposAluguel);
+  ccSaldoTotalEl.textContent = formatMoney(saldoCaixa);
+  ccSaldoTotalEl.classList.toggle('negative', saldoCaixa < 0);
 
   if (contas.length === 0) {
     cpListEl.innerHTML = `<li class="empty-state">Nenhuma conta cadastrada.</li>`;
@@ -699,6 +762,21 @@ async function carregarContasPagar() {
   });
 
   ocorrenciasParaExibir.sort((a, b) => a.data.localeCompare(b.data));
+
+  const primeiroAluguelAberto = ocorrenciasParaExibir.find((ocorrencia) => {
+    return !ocorrencia.paga && ocorrencia.conta.descricao.trim().toLocaleLowerCase('pt-BR') === 'aluguel';
+  });
+  if (primeiroAluguelAberto && saldoCaixa > 0) {
+    primeiroAluguelAberto.abatimentoCaixa = Math.min(round2(saldoCaixa), primeiroAluguelAberto.valor);
+    if (primeiroAluguelAberto.data.slice(0, 7) === mesAtual) {
+      totalMesNaoPago = round2(totalMesNaoPago - primeiroAluguelAberto.abatimentoCaixa);
+    }
+  }
+
+  function valorExibidoOcorrencia(ocorrencia) {
+    return round2(ocorrencia.valor - (ocorrencia.abatimentoCaixa || 0));
+  }
+
   const totalMesGeral = totalMesPago + totalMesNaoPago;
   cpTotalMesPagoEl.textContent = formatMoney(totalMesPago);
   cpTotalMesGeralEl.textContent = formatMoney(totalMesGeral);
@@ -710,7 +788,7 @@ async function carregarContasPagar() {
     if (!grupo) return null;
     const pendentes = grupo.itens.filter((i) => !i.paga);
     if (pendentes.length === 0) return null;
-    return pendentes.reduce((acc, i) => acc + i.valor, 0);
+    return pendentes.reduce((acc, i) => acc + valorExibidoOcorrencia(i), 0);
   }
 
   // Acha a primeira semana (a partir de `dataRef`, que já está `saltos`
@@ -754,7 +832,9 @@ async function carregarContasPagar() {
     return grupo.ano === anoHoje && grupo.mes === mesHoje && grupo.semana === semanaHoje;
   }
 
-  function renderizarItemOcorrencia({ conta, data, valor, paga, atrasada }) {
+  function renderizarItemOcorrencia(ocorrencia) {
+    const { conta, data, valor, paga, atrasada } = ocorrencia;
+    const valorExibido = valorExibidoOcorrencia(ocorrencia);
     const botoesAcao = paga ? '' : `
         <button type="button" class="btn-icon btn-icon-neutro cp-editar-btn" data-conta-id="${conta.id}" data-data="${data}" data-tipo="${conta.tipo}" data-valor="${valor}" aria-label="Editar valor" title="Editar valor">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -778,7 +858,7 @@ async function carregarContasPagar() {
             <span class="lancamento-data">${formatDataBR(data)}</span>
           </div>
         </label>
-        <span class="lancamento-valor negativo">${formatMoney(valor)}</span>${botoesAcao}
+        <span class="lancamento-valor negativo">${formatMoney(valorExibido)}</span>${botoesAcao}
       </li>
     `;
   }
@@ -788,7 +868,7 @@ async function carregarContasPagar() {
       const ehSemanaAtual = ehGrupoDaSemanaAtual(grupo);
       const itensHtml = grupo.itens.map(renderizarItemOcorrencia).join('');
       const rotuloSemana = `Semana ${grupo.semana}`;
-      const totalGrupo = grupo.itens.reduce((acc, item) => acc + item.valor, 0);
+      const totalGrupo = grupo.itens.reduce((acc, item) => acc + valorExibidoOcorrencia(item), 0);
 
       return `
         <li class="semana-grupo">
