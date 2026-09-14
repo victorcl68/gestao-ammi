@@ -98,6 +98,32 @@ body {
   color: var(--primary);
 }
 
+.btn-aporte {
+  flex-shrink: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  color: var(--primary-dark);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.emprestimo-grupo {
+  margin-bottom: 24px;
+}
+
+@media (max-width: 480px) {
+  .emprestimo-grupo .lancamento-item {
+    flex-wrap: wrap;
+  }
+
+  .emprestimo-grupo .btn-aporte {
+    margin-left: auto;
+  }
+}
+
 .card {
   background: var(--card-bg);
   border-radius: var(--radius);

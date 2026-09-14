@@ -14,10 +14,12 @@ const CP_EXDATES_TABLE = 'contas_pagar_exdates';
 const CP_PARCELAS_TABLE = 'contas_pagar_parcelas';
 const CP_PAGAMENTOS_TABLE = 'contas_pagar_pagamentos';
 const CP_AJUSTES_TABLE = 'contas_pagar_ajustes';
+const EMPRESTIMO_APORTES_TABLE = 'emprestimo_aportes';
 const FI_PESSOAS_TABLE = 'fiado_pessoas';
 const FI_VENDAS_TABLE = 'fiado_vendas';
 const FI_PAGAMENTOS_TABLE = 'fiado_pagamentos';
 const PERCENTUAL_COMISSAO = 0.25;
+const PERCENTUAL_EMPRESTIMO_VENDAS = 0.25;
 
 // ===================== HELPERS: dinheiro / data =====================
 
@@ -79,6 +81,10 @@ function calcularComissao(valorVenda) {
   return round2(valorVenda * PERCENTUAL_COMISSAO);
 }
 
+function calcularAporteVendaEmprestimo(valorVenda) {
+  return round2(valorVenda * PERCENTUAL_EMPRESTIMO_VENDAS);
+}
+
 function calcularSaldoSalario(lancamentos) {
   return round2(lancamentos.reduce((acc, item) => {
     return acc + (item.tipo === 'venda' ? Number(item.valor) : -Number(item.valor));
@@ -106,6 +112,26 @@ function calcularSaldoAposAluguel(saldoCaixa, valorAluguel) {
 
 function calcularAbatimentoAluguel(saldoCaixa, valorAluguel) {
   return Math.min(Math.max(round2(saldoCaixa), 0), Number(valorAluguel));
+}
+
+function ehEmprestimo(conta) {
+  return conta.descricao.trim().toLocaleLowerCase('pt-BR') === 'empréstimo';
+}
+
+function calcularSaldoEmprestimo(valorOriginal, totalAportes) {
+  return Math.max(round2(Number(valorOriginal) - Number(totalAportes)), 0);
+}
+
+function limitarAporteEmprestimo(valorAporte, valorRestante) {
+  return Math.min(round2(Number(valorAporte)), Number(valorRestante));
+}
+
+function somarAportesPorOcorrencia(aportes) {
+  return aportes.reduce((totais, aporte) => {
+    const chave = `${aporte.conta_id}|${aporte.data_ocorrencia}`;
+    totais.set(chave, round2((totais.get(chave) || 0) + Number(aporte.valor)));
+    return totais;
+  }, new Map());
 }
 
 function valorExibidoOcorrencia(ocorrencia) {
@@ -477,6 +503,60 @@ async function carregarSalario() {
   }).join('');
 }
 
+async function registrarAporteAutomaticoDaVenda(salarioLancamentoId, valorVenda, dataVenda) {
+  const [
+    { data: contas, error: errContas },
+    { data: exdatesRows, error: errEx },
+    { data: parcelasRows, error: errParc },
+    { data: pagos, error: errPag },
+    { data: ajustesRows, error: errAjustes },
+    { data: aportes, error: errAportes },
+  ] = await Promise.all([
+    supabase.from(CP_TABLE).select('*').order('data_inicio', { ascending: true }),
+    supabase.from(CP_EXDATES_TABLE).select('*'),
+    supabase.from(CP_PARCELAS_TABLE).select('*'),
+    supabase.from(CP_PAGAMENTOS_TABLE).select('*'),
+    supabase.from(CP_AJUSTES_TABLE).select('*'),
+    supabase.from(EMPRESTIMO_APORTES_TABLE).select('*'),
+  ]);
+
+  if (errContas || errEx || errParc || errPag || errAjustes || errAportes) {
+    return { error: true, houveAporte: false };
+  }
+
+  const emprestimo = encontrarPrimeiroEmprestimoAberto(
+    contas,
+    exdatesRows,
+    parcelasRows,
+    pagos,
+    ajustesRows,
+    aportes
+  );
+  if (!emprestimo) return { error: false, houveAporte: false };
+
+  const valorAporte = limitarAporteEmprestimo(calcularAporteVendaEmprestimo(valorVenda), emprestimo.valorRestante);
+  if (valorAporte <= 0) return { error: false, houveAporte: false };
+
+  const { error } = await supabase.from(EMPRESTIMO_APORTES_TABLE).insert({
+    conta_id: emprestimo.conta.id,
+    data_ocorrencia: emprestimo.data,
+    valor: valorAporte,
+    origem: 'venda',
+    salario_lancamento_id: salarioLancamentoId,
+    data: dataVenda,
+  });
+  if (error) return { error: true, houveAporte: false };
+
+  if (valorAporte >= emprestimo.valorRestante) {
+    await supabase.from(CP_PAGAMENTOS_TABLE).upsert({
+      conta_id: emprestimo.conta.id,
+      data: emprestimo.data,
+    });
+  }
+
+  return { error: false, houveAporte: true };
+}
+
 bloquearDuranteSubmit(salVendaForm, async (e) => {
   e.preventDefault();
   salVendaErrorEl.hidden = true;
@@ -493,13 +573,13 @@ bloquearDuranteSubmit(salVendaForm, async (e) => {
 
   const comissao = calcularComissao(vendaBase);
 
-  const { error } = await supabase.from(SAL_TABLE).insert({
+  const { data: vendaCriada, error } = await supabase.from(SAL_TABLE).insert({
     tipo: 'venda',
     valor: comissao,
     venda_base: vendaBase,
     descricao: descricao || null,
     data,
-  });
+  }).select('id').single();
 
   if (error) {
     salVendaErrorEl.textContent = 'Erro ao salvar. Tente novamente.';
@@ -507,10 +587,17 @@ bloquearDuranteSubmit(salVendaForm, async (e) => {
     return;
   }
 
+  const aporte = await registrarAporteAutomaticoDaVenda(vendaCriada.id, vendaBase, data);
+
   salVendaForm.reset();
   salVendaDataInput.value = hojeISO();
   updateSalVendaSubmitLabel();
   await carregarSalario();
+  await carregarContasPagar();
+  if (aporte.error) {
+    salVendaErrorEl.textContent = 'Venda salva, mas o aporte do Empréstimo falhou. Confira a migration 006.';
+    salVendaErrorEl.hidden = false;
+  }
 });
 
 bloquearDuranteSubmit(salPagamentoForm, async (e) => {
@@ -715,6 +802,47 @@ function encontrarPrimeiroAluguelAberto(contas, exdatesRows, parcelasRows, pagos
   return alugueisAbertos[0] || null;
 }
 
+function encontrarPrimeiroEmprestimoAberto(contas, exdatesRows, parcelasRows, pagos, ajustesRows, aportes) {
+  const pagosSet = new Set(pagos.map((pagamento) => `${pagamento.conta_id}|${pagamento.data}`));
+  const ajustesMap = new Map(ajustesRows.map((ajuste) => [`${ajuste.conta_id}|${ajuste.data}`, Number(ajuste.valor)]));
+  const aportesMap = somarAportesPorOcorrencia(aportes);
+  const emprestimosAbertos = [];
+
+  contas.filter(ehEmprestimo).forEach((conta) => {
+    let ocorrencias;
+    if (conta.tipo === 'parcelado') {
+      ocorrencias = parcelasRows
+        .filter((parcela) => parcela.conta_id === conta.id)
+        .map((parcela) => ({ data: parcela.data, valorOriginal: Number(parcela.valor) }));
+    } else {
+      const exdates = new Set(
+        exdatesRows.filter((exdate) => exdate.conta_id === conta.id).map((exdate) => exdate.data)
+      );
+      ocorrencias = gerarOcorrenciasRecorrenteParaExibir(
+        conta,
+        exdates,
+        pagosSet,
+        pagos.length + aportes.length + 1
+      ).map((data) => ({
+        data,
+        valorOriginal: ajustesMap.get(`${conta.id}|${data}`) ?? Number(conta.valor),
+      }));
+    }
+
+    ocorrencias.forEach((ocorrencia) => {
+      const chave = `${conta.id}|${ocorrencia.data}`;
+      const totalAportes = aportesMap.get(chave) || 0;
+      const valorRestante = calcularSaldoEmprestimo(ocorrencia.valorOriginal, totalAportes);
+      if (!pagosSet.has(chave) && valorRestante > 0) {
+        emprestimosAbertos.push({ conta, ...ocorrencia, totalAportes, valorRestante });
+      }
+    });
+  });
+
+  emprestimosAbertos.sort((a, b) => a.data.localeCompare(b.data));
+  return emprestimosAbertos[0] || null;
+}
+
 async function carregarContasPagar() {
   cpDataInicioInput.value = cpDataInicioInput.value || hojeISO();
 
@@ -725,6 +853,7 @@ async function carregarContasPagar() {
     { data: pagos, error: errPag },
     { data: ajustesRows, error: errAjustes },
     { data: caixaRows, error: errCaixa },
+    { data: aportesRows, error: errAportes },
   ] = await Promise.all([
     supabase.from(CP_TABLE).select('*').order('data_inicio', { ascending: true }),
     supabase.from(CP_EXDATES_TABLE).select('*'),
@@ -736,10 +865,11 @@ async function carregarContasPagar() {
       .order('data', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(50),
+    supabase.from(EMPRESTIMO_APORTES_TABLE).select('*').order('data', { ascending: false }),
   ]);
 
-  if (errContas || errEx || errParc || errPag || errAjustes || errCaixa) {
-    cpListEl.innerHTML = `<li class="empty-state">Erro ao carregar contas a pagar.</li>`;
+  if (errContas || errEx || errParc || errPag || errAjustes || errCaixa || errAportes) {
+    cpListEl.innerHTML = `<li class="empty-state">${errAportes ? 'Aplique a migration 006 para habilitar os aportes.' : 'Erro ao carregar contas a pagar.'}</li>`;
     cpContasListEl.innerHTML = '';
     return;
   }
@@ -747,6 +877,7 @@ async function carregarContasPagar() {
   const ajustesMap = new Map(ajustesRows.map((a) => [`${a.conta_id}|${a.data}`, Number(a.valor)]));
 
   const pagosSet = new Set(pagos.map((p) => `${p.conta_id}|${p.data}`));
+  const aportesMap = somarAportesPorOcorrencia(aportesRows);
   const saldoCaixa = calcularSaldoCaixa(caixaRows);
   const aluguelAbertoCaixa = encontrarPrimeiroAluguelAberto(contas, exdatesRows, parcelasRows, pagos, ajustesRows);
   const saldoAposAluguel = calcularSaldoAposAluguel(saldoCaixa, aluguelAbertoCaixa?.valor);
@@ -789,9 +920,25 @@ async function carregarContasPagar() {
     }
 
     ocorrencias.forEach(({ data, valor }) => {
-      const paga = pagosSet.has(`${conta.id}|${data}`);
+      const chave = `${conta.id}|${data}`;
+      const emprestimo = ehEmprestimo(conta);
+      const valorOriginal = valor;
+      const totalAportes = emprestimo ? (aportesMap.get(chave) || 0) : 0;
+      const valorRestante = emprestimo ? calcularSaldoEmprestimo(valorOriginal, totalAportes) : valorOriginal;
+      const pagaRegistrada = pagosSet.has(chave);
+      const paga = pagaRegistrada || (emprestimo && valorRestante === 0);
       const atrasada = data < hoje && !paga;
-      ocorrenciasParaExibir.push({ conta, data, valor, paga, atrasada });
+      ocorrenciasParaExibir.push({
+        conta,
+        data,
+        valor: valorRestante,
+        valorOriginal,
+        totalAportes,
+        emprestimo,
+        pagaRegistrada,
+        paga,
+        atrasada,
+      });
     });
   });
 
@@ -805,9 +952,14 @@ async function carregarContasPagar() {
   }
 
   const ocorrenciasMesAtual = ocorrenciasParaExibir.filter((ocorrencia) => ocorrencia.data.slice(0, 7) === mesAtual);
-  const totalMesPago = ocorrenciasMesAtual
-    .filter((ocorrencia) => ocorrencia.paga)
-    .reduce((acc, ocorrencia) => acc + valorExibidoOcorrencia(ocorrencia), 0);
+  const totalMesPago = ocorrenciasMesAtual.reduce((acc, ocorrencia) => {
+    if (ocorrencia.emprestimo) {
+      return acc + (ocorrencia.pagaRegistrada
+        ? ocorrencia.valorOriginal
+        : Math.min(ocorrencia.totalAportes, ocorrencia.valorOriginal));
+    }
+    return acc + (ocorrencia.paga ? valorExibidoOcorrencia(ocorrencia) : 0);
+  }, 0);
   const totalMesNaoPago = ocorrenciasMesAtual
     .filter((ocorrencia) => !ocorrencia.paga)
     .reduce((acc, ocorrencia) => acc + valorExibidoOcorrencia(ocorrencia), 0);
@@ -831,6 +983,12 @@ async function carregarContasPagar() {
   // a semana já está toda paga (ou vazia), avança semana a semana até
   // achar uma com pendência — sem limite.
   function acharSemanaComPendencia(dataRef, saltos) {
+    const datasPendentes = ocorrenciasParaExibir
+      .filter((ocorrencia) => !ocorrencia.paga)
+      .map((ocorrencia) => ocorrencia.data)
+      .sort();
+    const ultimaDataPendente = datasPendentes[datasPendentes.length - 1];
+
     while (true) {
       const [ano, mes] = dataRef.split('-').map(Number);
       const semana = semanaDoMes(dataRef);
@@ -838,6 +996,10 @@ async function carregarContasPagar() {
 
       if (total !== null) {
         return { ano, mes, semana, dataRef, saltos, total };
+      }
+
+      if (!ultimaDataPendente || dataRef > ultimaDataPendente) {
+        return { ano, mes, semana, dataRef, saltos, total: 0 };
       }
 
       dataRef = chaveSemanaSeguinte(dataRef).data;
@@ -868,10 +1030,13 @@ async function carregarContasPagar() {
   }
 
   function renderizarItemOcorrencia(ocorrencia) {
-    const { conta, data, valor, paga, atrasada } = ocorrencia;
+    const { conta, data, valor, valorOriginal, totalAportes, emprestimo, paga, atrasada } = ocorrencia;
     const valorExibido = valorExibidoOcorrencia(ocorrencia);
+    const botaoAporte = emprestimo && !paga ? `
+        <button type="button" class="btn-aporte cp-aporte-btn" data-conta-id="${conta.id}" data-data="${data}" data-restante="${valor}" aria-label="Fazer aporte" title="Fazer aporte">+ Aporte</button>` : '';
     const botoesAcao = paga ? '' : `
-        <button type="button" class="btn-icon btn-icon-neutro cp-editar-btn" data-conta-id="${conta.id}" data-data="${data}" data-tipo="${conta.tipo}" data-valor="${valor}" aria-label="Editar valor" title="Editar valor">
+        ${botaoAporte}
+        <button type="button" class="btn-icon btn-icon-neutro cp-editar-btn" data-conta-id="${conta.id}" data-data="${data}" data-tipo="${conta.tipo}" data-valor="${valorOriginal}" aria-label="Editar valor" title="Editar valor">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
             <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
@@ -887,10 +1052,10 @@ async function carregarContasPagar() {
     return `
       <li class="lancamento-item${atrasada ? ' lancamento-atrasada' : ''}">
         <label class="lancamento-checkbox">
-          <input type="checkbox" data-conta-id="${conta.id}" data-data="${data}" class="cp-pago-checkbox" ${paga ? 'checked' : ''}>
+          <input type="checkbox" data-conta-id="${conta.id}" data-data="${data}" class="cp-pago-checkbox" ${paga ? 'checked' : ''} ${emprestimo ? 'disabled' : ''}>
           <div class="lancamento-info">
             <span class="lancamento-desc">${conta.descricao}${atrasada ? ' <span class="tag-atrasada">Atrasada</span>' : ''}</span>
-            <span class="lancamento-data">${formatDataBR(data)}</span>
+            <span class="lancamento-data">${formatDataBR(data)}${emprestimo ? ` · ${formatMoney(totalAportes)} aportado` : ''}</span>
           </div>
         </label>
         <span class="lancamento-valor negativo">${formatMoney(valorExibido)}</span>${botoesAcao}
@@ -917,7 +1082,18 @@ async function carregarContasPagar() {
     }).join('');
   }
 
-  cpListEl.innerHTML = renderizarGruposSemana(agruparPorSemana(ocorrenciasParaExibir));
+  const ocorrenciasEmprestimo = ocorrenciasParaExibir.filter((ocorrencia) => ocorrencia.emprestimo);
+  const demaisOcorrencias = ocorrenciasParaExibir.filter((ocorrencia) => !ocorrencia.emprestimo);
+  const emprestimosHtml = ocorrenciasEmprestimo.length === 0 ? '' : `
+    <li class="semana-grupo emprestimo-grupo">
+      <span class="semana-grupo-titulo">
+        <span>Empréstimo</span>
+        <span class="semana-grupo-total">${formatMoney(ocorrenciasEmprestimo.reduce((acc, item) => acc + item.valor, 0))}</span>
+      </span>
+      <ul class="lancamentos">${ocorrenciasEmprestimo.map(renderizarItemOcorrencia).join('')}</ul>
+    </li>
+  `;
+  cpListEl.innerHTML = emprestimosHtml + renderizarGruposSemana(agruparPorSemana(demaisOcorrencias));
 
   cpContasListEl.innerHTML = contas.map((conta) => {
     const valorExibido = conta.tipo === 'parcelado'
@@ -958,6 +1134,43 @@ async function alternarPagoContasPagar(e) {
 cpListEl.addEventListener('change', alternarPagoContasPagar);
 
 cpListEl.addEventListener('click', async (e) => {
+  const aporteBtn = e.target.closest('.cp-aporte-btn');
+  if (aporteBtn) {
+    const valorTexto = prompt('Valor do aporte:', aporteBtn.dataset.restante.replace('.', ','));
+    if (valorTexto === null) return;
+
+    const valorInformado = parseMoney(valorTexto);
+    if (!valorInformado || valorInformado <= 0) {
+      alert('Valor inválido.');
+      return;
+    }
+
+    const valorRestante = Number(aporteBtn.dataset.restante);
+    const valorAporte = limitarAporteEmprestimo(valorInformado, valorRestante);
+    const { error } = await supabase.from(EMPRESTIMO_APORTES_TABLE).insert({
+      conta_id: aporteBtn.dataset.contaId,
+      data_ocorrencia: aporteBtn.dataset.data,
+      valor: valorAporte,
+      origem: 'manual',
+      data: hojeISO(),
+    });
+
+    if (error) {
+      alert('Erro ao registrar o aporte. Confira se a migration 006 foi aplicada.');
+      return;
+    }
+
+    if (valorAporte >= valorRestante) {
+      await supabase.from(CP_PAGAMENTOS_TABLE).upsert({
+        conta_id: aporteBtn.dataset.contaId,
+        data: aporteBtn.dataset.data,
+      });
+    }
+
+    await carregarContasPagar();
+    return;
+  }
+
   const pularBtn = e.target.closest('.cp-pular-btn');
   if (pularBtn) {
     if (pularBtn.dataset.tipo === 'parcelado') {
@@ -1205,7 +1418,7 @@ fiListEl.addEventListener('click', async (e) => {
   if (removerVendaBtn) {
     const { data: venda, error: errVenda } = await supabase
       .from(FI_VENDAS_TABLE)
-      .select('pessoa_id, valor')
+      .select('id, pessoa_id, valor')
       .eq('id', removerVendaBtn.dataset.vendaId)
       .single();
 
@@ -1215,7 +1428,7 @@ fiListEl.addEventListener('click', async (e) => {
     }
 
     const [{ data: vendas, error: errVendas }, { data: pagamentos, error: errPagamentos }] = await Promise.all([
-      supabase.from(FI_VENDAS_TABLE).select('valor').eq('pessoa_id', venda.pessoa_id),
+      supabase.from(FI_VENDAS_TABLE).select('id, valor').eq('pessoa_id', venda.pessoa_id),
       supabase.from(FI_PAGAMENTOS_TABLE).select('valor').eq('pessoa_id', venda.pessoa_id),
     ]);
 
@@ -1417,6 +1630,40 @@ function executarTestes() {
     igual(valorExibidoOcorrencia({ valor: 1000, abatimentoCaixa: 300 }), 700);
   });
   teste('Salário — comissão é 25% da venda', () => igual(calcularComissao(199.99), 50));
+  teste('Empréstimo — aporte automático é 25% da venda bruta', () => {
+    igual(calcularAporteVendaEmprestimo(199.99), 50);
+  });
+  teste('Empréstimo — aportes reduzem o saldo sem deixá-lo negativo', () => {
+    igual(calcularSaldoEmprestimo(1000, 1250), 0);
+  });
+  teste('Empréstimo — aporte maior é limitado ao saldo restante', () => {
+    igual(limitarAporteEmprestimo(500, 120), 120);
+  });
+  teste('Empréstimo — soma o histórico por ocorrência', () => {
+    const totais = somarAportesPorOcorrencia([
+      { conta_id: 'e1', data_ocorrencia: '2026-09-10', valor: 25 },
+      { conta_id: 'e1', data_ocorrencia: '2026-09-10', valor: 12.5 },
+      { conta_id: 'e1', data_ocorrencia: '2026-10-10', valor: 10 },
+    ]);
+    igual(totais.get('e1|2026-09-10'), 37.5);
+    igual(totais.get('e1|2026-10-10'), 10);
+  });
+  teste('Empréstimo — escolhe o primeiro aberto e ignora nome aproximado', () => {
+    const contas = [
+      { id: 'e1', descricao: ' EMPRÉSTIMO ', tipo: 'parcelado' },
+      { id: 'e2', descricao: 'Empréstimo banco', tipo: 'parcelado' },
+    ];
+    const parcelas = [
+      { conta_id: 'e1', data: '2026-09-10', valor: 500 },
+      { conta_id: 'e1', data: '2026-10-10', valor: 600 },
+      { conta_id: 'e2', data: '2026-08-10', valor: 100 },
+    ];
+    const aportes = [{ conta_id: 'e1', data_ocorrencia: '2026-09-10', valor: 200 }];
+    const emprestimo = encontrarPrimeiroEmprestimoAberto(contas, [], parcelas, [], [], aportes);
+    igual(emprestimo.data, '2026-09-10');
+    igual(emprestimo.totalAportes, 200);
+    igual(emprestimo.valorRestante, 300);
+  });
   teste('Salário — vendas somam e pagamentos subtraem', () => {
     igual(calcularSaldoSalario([{ tipo: 'venda', valor: 80 }, { tipo: 'pagamento', valor: 30 }]), 50);
   });

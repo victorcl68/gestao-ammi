@@ -5,7 +5,7 @@ Não trata de stack, setup ou como rodar — só do que o sistema faz e por quê
 O objetivo é que essas regras não se percam com o tempo, já que boa parte
 delas não é óbvia lendo o código e nenhuma está registrada em outro lugar.
 
-Última revisão: 2026-09-14 (abatimento do Caixa Casa no primeiro aluguel aberto).
+Última revisão: 2026-09-14 (aportes automáticos e manuais no Empréstimo).
 
 ---
 
@@ -32,11 +32,16 @@ delas não é óbvia lendo o código e nenhuma está registrada em outro lugar.
 
 ## Conceitos gerais
 
-### Integração entre Caixa Casa e Contas a Pagar
+### Integrações entre os módulos
 
-Salário continua independente dos demais módulos. Caixa Casa e Contas a
-Pagar se comunicam somente na exibição do primeiro aluguel aberto, conforme
-a regra documentada em [Abatimento do Caixa Casa no aluguel](#abatimento-do-caixa-casa-no-aluguel).
+Caixa Casa e Contas a Pagar se comunicam na exibição do primeiro aluguel
+aberto, conforme a regra documentada em [Abatimento do Caixa Casa no
+aluguel](#abatimento-do-caixa-casa-no-aluguel).
+
+Uma venda lançada no módulo Salário também pode gerar um aporte no primeiro
+Empréstimo aberto em Contas a Pagar. Esse aporte usa 25% da venda bruta, mas é
+uma regra independente da comissão salarial, mesmo que os dois percentuais
+sejam atualmente iguais.
 
 Pagar uma conta em Contas a Pagar **não** cria um débito no Caixa Casa. O
 abatimento do aluguel é apenas uma projeção visual do valor que ainda falta;
@@ -156,6 +161,24 @@ Quando você lança uma venda:
 O botão "Salvar" mostra em tempo real a comissão que será gravada
 (`Salvar — R$ 25,00`), para conferência antes de confirmar.
 
+### Aporte automático no Empréstimo
+
+Ao salvar uma venda, o sistema procura a primeira ocorrência aberta cuja
+conta se chame exatamente `Empréstimo`. Se existir, registra nela um aporte:
+
+```
+aporte = valor_bruto_da_venda × 0,25
+```
+
+O aporte nunca ultrapassa o saldo restante do Empréstimo. A comissão da
+gerente continua sendo criada normalmente e não é reduzida nem substituída
+por esse aporte. Cada venda pode gerar no máximo um aporte, garantido pelo
+índice único de `salario_lancamento_id`.
+
+Se não houver Empréstimo aberto, a venda é salva normalmente e nenhum aporte
+é criado. Se a venda for salva mas o aporte falhar, a interface informa
+explicitamente a falha para que ela não passe despercebida.
+
 ### Pagamento
 
 Um pagamento é dinheiro entregue à gerente, que **abate** o saldo devido.
@@ -213,6 +236,38 @@ São mutuamente exclusivos e o banco garante isso por constraint:
 | `data_inicio` | Data escolhida | Menor data entre as parcelas |
 | Datas das ocorrências | Calculadas da regra | Linhas em `contas_pagar_parcelas` |
 | Onde mora o valor | `contas_pagar.valor` | `contas_pagar_parcelas.valor` |
+
+---
+
+### Empréstimo
+
+Uma conta cuja descrição seja exatamente `Empréstimo`, sem diferenciar
+maiúsculas de minúsculas e ignorando espaços nas pontas, recebe tratamento
+especial. O uso esperado é uma conta Parcelada com uma única data.
+
+Todas as ocorrências chamadas `Empréstimo` ficam em um bloco próprio no topo
+da lista, antes de qualquer semana, independentemente da data. A data original
+continua visível.
+
+O valor mostrado é o saldo restante:
+
+```
+saldo_restante = max(valor_original − soma_dos_aportes, 0)
+```
+
+Cada linha também mostra o total já aportado. O botão **Aporte** aceita um
+pagamento parcial manual; se o valor informado ultrapassar o saldo, somente o
+necessário para zerar é registrado. Ao chegar a zero, a ocorrência é
+considerada paga automaticamente e não aceita novos aportes.
+
+Os aportes ficam em `emprestimo_aportes`, um por linha, com origem `manual` ou
+`venda`, data e vínculo opcional com a venda do módulo Salário. Excluir a conta
+remove seus aportes em cascata. Excluir diretamente uma venda no banco não
+remove o aporte já realizado: o vínculo vira nulo para preservar o histórico.
+
+No resumo mensal, aportes feitos no Empréstimo contam como valor pago e o
+saldo restante conta como valor não pago. Nos totais da semana e na linha da
+ocorrência aparece apenas o saldo restante.
 
 ---
 
@@ -437,14 +492,13 @@ seguinte à do primeiro, buscada da mesma forma — então se o primeiro virou
 "Em 2 semanas", o segundo busca a partir da semana 3 e pode virar "Em 3
 semanas", "Em 4 semanas", etc.
 
-A busca avança semana a semana **sem limite** até achar pendência. Se todo
-o resto do mês (e o mês seguinte, e o seguinte…) estiver pago, o card
-mostra a primeira semana com alguma coisa por pagar, não importa quão longe
-esteja.
+A busca avança semana a semana até achar uma pendência entre as ocorrências
+carregadas. Se não existir nenhuma pendência naquela semana nem depois dela,
+o card mostra `R$ 0,00`; isso também impede uma busca infinita quando existem
+somente contas parceladas antigas.
 
-O motivo: o card existe para responder "o que eu preciso resolver agora",
-não para mostrar `R$ 0,00` quando não há nada pendente na semana literal —
-isso seria informação inútil, já que o objetivo é saber o que falta.
+Enquanto houver pendências futuras carregadas, o card continua respondendo
+"o que eu preciso resolver agora" e avança até a primeira delas.
 
 Consequência para a lista abaixo do card: o destaque visual de "semana
 atual" nos cabeçalhos (ver [Agrupamento por
@@ -590,8 +644,8 @@ um fato consumado.
 ### Exclusão de conta é em cascata
 
 Remover uma conta em "Contas cadastradas" apaga também, por `on delete
-cascade`, todas as suas parcelas, exdates, pagamentos e ajustes. Não há
-lixeira nem desfazer. Por isso a ação pede confirmação.
+cascade`, todas as suas parcelas, exdates, pagamentos, ajustes e aportes de
+Empréstimo. Não há lixeira nem desfazer. Por isso a ação pede confirmação.
 
 ### Valores na lista "Contas cadastradas"
 
@@ -622,6 +676,7 @@ As verificações automatizadas cobrem as regras determinísticas mais sensívei
 - leitura e arredondamento de dinheiro;
 - saldo do Caixa, abatimento do aluguel e limite em zero;
 - comissão e saldo do Salário;
+- aporte de 25% da venda bruta, saldo e limite de aportes do Empréstimo;
 - saldo, limite de pagamento e proteção ao remover vendas do Fiado;
 - repetição, divisão, centavos e limite de 24 parcelas;
 - datas, meses sem dia 31 e ano bissexto;
