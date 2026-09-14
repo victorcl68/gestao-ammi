@@ -647,6 +647,42 @@ button[type="submit"]:disabled {
   padding: 24px 0;
 }
 
+.testes-page {
+  max-width: 760px;
+}
+
+.testes-page h1 {
+  margin-top: 0;
+}
+
+.testes-resumo {
+  font-weight: 700;
+}
+
+.testes-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.teste-ok,
+.teste-falhou {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--card-bg);
+  box-shadow: var(--shadow);
+}
+
+.teste-ok {
+  color: var(--success);
+}
+
+.teste-falhou {
+  color: var(--danger);
+}
+
 /* Desktop: Caixa Casa e Salário lado a lado */
 .panel-title {
   display: none;

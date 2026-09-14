@@ -69,6 +69,49 @@ function round2(n) {
   return Math.round(n * 100) / 100;
 }
 
+function calcularSaldoCaixa(lancamentos) {
+  return round2(lancamentos.reduce((acc, item) => {
+    return acc + (item.tipo === 'entrada' ? Number(item.valor) : -Number(item.valor));
+  }, 0));
+}
+
+function calcularComissao(valorVenda) {
+  return round2(valorVenda * PERCENTUAL_COMISSAO);
+}
+
+function calcularSaldoSalario(lancamentos) {
+  return round2(lancamentos.reduce((acc, item) => {
+    return acc + (item.tipo === 'venda' ? Number(item.valor) : -Number(item.valor));
+  }, 0));
+}
+
+function calcularSaldoFiado(vendas, pagamentos) {
+  const totalVendas = vendas.reduce((acc, item) => acc + Number(item.valor), 0);
+  const totalPagamentos = pagamentos.reduce((acc, item) => acc + Number(item.valor), 0);
+  return round2(totalVendas - totalPagamentos);
+}
+
+function podeRegistrarPagamentoFiado(valor, saldo) {
+  return valor > 0 && valor <= saldo;
+}
+
+function podeRemoverVendaFiado(vendas, pagamentos, vendaRemovida) {
+  const vendasRestantes = vendas.filter((venda) => venda.id !== vendaRemovida.id);
+  return calcularSaldoFiado(vendasRestantes, pagamentos) >= 0;
+}
+
+function calcularSaldoAposAluguel(saldoCaixa, valorAluguel) {
+  return Math.max(round2(saldoCaixa - (valorAluguel || 0)), 0);
+}
+
+function calcularAbatimentoAluguel(saldoCaixa, valorAluguel) {
+  return Math.min(Math.max(round2(saldoCaixa), 0), Number(valorAluguel));
+}
+
+function valorExibidoOcorrencia(ocorrencia) {
+  return round2(ocorrencia.valor - (ocorrencia.abatimentoCaixa || 0));
+}
+
 // Data de hoje (YYYY-MM-DD) no fuso America/Sao_Paulo.
 function hojeISO() {
   const formatter = new Intl.DateTimeFormat('en-CA', {
@@ -151,6 +194,7 @@ const views = {
   salario: document.getElementById('view-salario'),
   'contas-pagar': document.getElementById('view-contas-pagar'),
   fiado: document.getElementById('view-fiado'),
+  testes: document.getElementById('view-testes'),
 };
 
 const desktopGridEl = document.getElementById('desktop-grid');
@@ -160,7 +204,7 @@ function showView(name) {
     el.hidden = key !== name;
   });
 
-  const logado = name !== 'login';
+  const logado = name !== 'login' && name !== 'testes';
   desktopGridEl.hidden = !logado;
 
   if (name === 'caixa-casa' || name === 'home') carregarCaixaCasa();
@@ -280,11 +324,9 @@ async function carregarCaixaCasa() {
     return;
   }
 
-  const saldo = data.reduce((acc, l) => {
-    return acc + (l.tipo === 'entrada' ? Number(l.valor) : -Number(l.valor));
-  }, 0);
+  const saldo = calcularSaldoCaixa(data);
   const aluguelAberto = encontrarPrimeiroAluguelAberto(contas, exdatesRows, parcelasRows, pagos, ajustesRows);
-  const saldoAposAluguel = Math.max(round2(saldo - (aluguelAberto?.valor || 0)), 0);
+  const saldoAposAluguel = calcularSaldoAposAluguel(saldo, aluguelAberto?.valor);
   ccSaldoEl.textContent = formatMoney(saldoAposAluguel);
   ccSaldoTotalEl.textContent = formatMoney(saldo);
   ccSaldoTotalEl.classList.toggle('negative', saldo < 0);
@@ -386,7 +428,7 @@ function updateSalVendaSubmitLabel() {
     salVendaSubmitEl.textContent = 'Salvar';
     return;
   }
-  const comissao = round2(valor * PERCENTUAL_COMISSAO);
+  const comissao = calcularComissao(valor);
   salVendaSubmitEl.textContent = `Salvar — ${formatMoney(comissao)}`;
 }
 
@@ -408,9 +450,7 @@ async function carregarSalario() {
     return;
   }
 
-  const saldo = data.reduce((acc, l) => {
-    return acc + (l.tipo === 'venda' ? Number(l.valor) : -Number(l.valor));
-  }, 0);
+  const saldo = calcularSaldoSalario(data);
   salSaldoEl.textContent = formatMoney(saldo);
   salSaldoEl.classList.toggle('negative', saldo < 0);
 
@@ -451,7 +491,7 @@ bloquearDuranteSubmit(salVendaForm, async (e) => {
     return;
   }
 
-  const comissao = round2(vendaBase * PERCENTUAL_COMISSAO);
+  const comissao = calcularComissao(vendaBase);
 
   const { error } = await supabase.from(SAL_TABLE).insert({
     tipo: 'venda',
@@ -540,7 +580,7 @@ document.querySelectorAll('input[name="cp-tipo"]').forEach((el) => {
 
 cpQtdeParcelasInput.addEventListener('input', () => {
   cpQtdeParcelasInput.value = cpQtdeParcelasInput.value.replace(/\D/g, '');
-  const qtde = Math.min(Number(cpQtdeParcelasInput.value) || 0, 24);
+  const qtde = limitarQuantidadeParcelas(cpQtdeParcelasInput.value);
 
   const existentes = cpDatasParcelasEl.querySelectorAll('input[type="date"]');
   if (qtde < existentes.length) {
@@ -558,6 +598,10 @@ cpQtdeParcelasInput.addEventListener('input', () => {
     cpDatasParcelasEl.appendChild(wrapper);
   }
 });
+
+function limitarQuantidadeParcelas(valor) {
+  return Math.min(Number(valor) || 0, 24);
+}
 
 // "repetir": valor digitado se repete em cada parcela.
 // "dividir": valor digitado é o total, dividido em partes iguais — o
@@ -616,9 +660,7 @@ function gerarOcorrenciasRecorrenteAte(conta, exdates, ate) {
 
 // Ocorrências vencidas (< hoje) e não pagas de uma conta recorrente, mais
 // as próximas `qtdeFuturas` a partir de hoje (inclusive).
-function gerarOcorrenciasRecorrenteParaExibir(conta, exdates, pagosSet, qtdeFuturas) {
-  const hoje = hojeISO();
-
+function gerarOcorrenciasRecorrenteParaExibir(conta, exdates, pagosSet, qtdeFuturas, hoje = hojeISO()) {
   const atrasadas = gerarOcorrenciasRecorrenteAte(conta, exdates, hoje)
     .filter((data) => data < hoje && !pagosSet.has(`${conta.id}|${data}`));
 
@@ -705,11 +747,9 @@ async function carregarContasPagar() {
   const ajustesMap = new Map(ajustesRows.map((a) => [`${a.conta_id}|${a.data}`, Number(a.valor)]));
 
   const pagosSet = new Set(pagos.map((p) => `${p.conta_id}|${p.data}`));
-  const saldoCaixa = caixaRows.reduce((acc, lancamento) => {
-    return acc + (lancamento.tipo === 'entrada' ? Number(lancamento.valor) : -Number(lancamento.valor));
-  }, 0);
+  const saldoCaixa = calcularSaldoCaixa(caixaRows);
   const aluguelAbertoCaixa = encontrarPrimeiroAluguelAberto(contas, exdatesRows, parcelasRows, pagos, ajustesRows);
-  const saldoAposAluguel = Math.max(round2(saldoCaixa - (aluguelAbertoCaixa?.valor || 0)), 0);
+  const saldoAposAluguel = calcularSaldoAposAluguel(saldoCaixa, aluguelAbertoCaixa?.valor);
   ccSaldoEl.textContent = formatMoney(saldoAposAluguel);
   ccSaldoTotalEl.textContent = formatMoney(saldoCaixa);
   ccSaldoTotalEl.classList.toggle('negative', saldoCaixa < 0);
@@ -728,8 +768,6 @@ async function carregarContasPagar() {
 
   const hoje = hojeISO();
   const mesAtual = hoje.slice(0, 7);
-  let totalMesPago = 0;
-  let totalMesNaoPago = 0;
   const ocorrenciasParaExibir = [];
 
   contas.forEach((conta) => {
@@ -753,10 +791,6 @@ async function carregarContasPagar() {
     ocorrencias.forEach(({ data, valor }) => {
       const paga = pagosSet.has(`${conta.id}|${data}`);
       const atrasada = data < hoje && !paga;
-      if (data.slice(0, 7) === mesAtual) {
-        if (paga) totalMesPago += valor;
-        else totalMesNaoPago += valor;
-      }
       ocorrenciasParaExibir.push({ conta, data, valor, paga, atrasada });
     });
   });
@@ -767,17 +801,18 @@ async function carregarContasPagar() {
     return !ocorrencia.paga && ocorrencia.conta.descricao.trim().toLocaleLowerCase('pt-BR') === 'aluguel';
   });
   if (primeiroAluguelAberto && saldoCaixa > 0) {
-    primeiroAluguelAberto.abatimentoCaixa = Math.min(round2(saldoCaixa), primeiroAluguelAberto.valor);
-    if (primeiroAluguelAberto.data.slice(0, 7) === mesAtual) {
-      totalMesNaoPago = round2(totalMesNaoPago - primeiroAluguelAberto.abatimentoCaixa);
-    }
+    primeiroAluguelAberto.abatimentoCaixa = calcularAbatimentoAluguel(saldoCaixa, primeiroAluguelAberto.valor);
   }
 
-  function valorExibidoOcorrencia(ocorrencia) {
-    return round2(ocorrencia.valor - (ocorrencia.abatimentoCaixa || 0));
-  }
+  const ocorrenciasMesAtual = ocorrenciasParaExibir.filter((ocorrencia) => ocorrencia.data.slice(0, 7) === mesAtual);
+  const totalMesPago = ocorrenciasMesAtual
+    .filter((ocorrencia) => ocorrencia.paga)
+    .reduce((acc, ocorrencia) => acc + valorExibidoOcorrencia(ocorrencia), 0);
+  const totalMesNaoPago = ocorrenciasMesAtual
+    .filter((ocorrencia) => !ocorrencia.paga)
+    .reduce((acc, ocorrencia) => acc + valorExibidoOcorrencia(ocorrencia), 0);
 
-  const totalMesGeral = totalMesPago + totalMesNaoPago;
+  const totalMesGeral = round2(totalMesPago + totalMesNaoPago);
   cpTotalMesPagoEl.textContent = formatMoney(totalMesPago);
   cpTotalMesGeralEl.textContent = formatMoney(totalMesGeral);
 
@@ -1093,13 +1128,9 @@ async function carregarFiado() {
   }
 
   const saldosPorPessoa = new Map(pessoas.map((pessoa) => {
-    const totalVendas = vendas
-      .filter((venda) => venda.pessoa_id === pessoa.id)
-      .reduce((acc, venda) => acc + Number(venda.valor), 0);
-    const totalPagamentos = pagamentos
-      .filter((pagamento) => pagamento.pessoa_id === pessoa.id)
-      .reduce((acc, pagamento) => acc + Number(pagamento.valor), 0);
-    return [pessoa.id, round2(totalVendas - totalPagamentos)];
+    const vendasDaPessoa = vendas.filter((venda) => venda.pessoa_id === pessoa.id);
+    const pagamentosDaPessoa = pagamentos.filter((pagamento) => pagamento.pessoa_id === pessoa.id);
+    return [pessoa.id, calcularSaldoFiado(vendasDaPessoa, pagamentosDaPessoa)];
   }));
 
   const pessoaSelecionada = fiPagamentoPessoaSelect.value;
@@ -1193,14 +1224,7 @@ fiListEl.addEventListener('click', async (e) => {
       return;
     }
 
-    const totalVendasRestantes = round2(
-      vendas.reduce((acc, item) => acc + Number(item.valor), 0) - Number(venda.valor)
-    );
-    const totalPagamentos = round2(
-      pagamentos.reduce((acc, pagamento) => acc + Number(pagamento.valor), 0)
-    );
-
-    if (totalVendasRestantes < totalPagamentos) {
+    if (!podeRemoverVendaFiado(vendas, pagamentos, venda)) {
       alert('Não é possível remover esta venda porque há pagamentos vinculados ao saldo. Remova primeiro o pagamento necessário.');
       return;
     }
@@ -1329,11 +1353,9 @@ bloquearDuranteSubmit(fiPagamentoForm, async (e) => {
     return;
   }
 
-  const totalVendas = vendas.reduce((acc, venda) => acc + Number(venda.valor), 0);
-  const totalPagamentos = pagamentos.reduce((acc, pagamento) => acc + Number(pagamento.valor), 0);
-  const saldoPessoa = round2(totalVendas - totalPagamentos);
+  const saldoPessoa = calcularSaldoFiado(vendas, pagamentos);
 
-  if (valor > saldoPessoa) {
+  if (!podeRegistrarPagamentoFiado(valor, saldoPessoa)) {
     fiPagamentoErrorEl.textContent = `O pagamento não pode ultrapassar o saldo de ${formatMoney(saldoPessoa)}.`;
     fiPagamentoErrorEl.hidden = false;
     return;
@@ -1360,4 +1382,141 @@ bloquearDuranteSubmit(fiPagamentoForm, async (e) => {
 
 // ===================== INIT =====================
 
-checkSession();
+function executarTestes() {
+  showView('testes');
+  document.title = 'Testes — Gestão Ammi';
+
+  const resultados = [];
+  const igual = (atual, esperado) => {
+    if (!Object.is(atual, esperado)) {
+      throw new Error(`esperado ${JSON.stringify(esperado)}, recebido ${JSON.stringify(atual)}`);
+    }
+  };
+  const igualJson = (atual, esperado) => igual(JSON.stringify(atual), JSON.stringify(esperado));
+  const teste = (nome, executar) => {
+    try {
+      executar();
+      resultados.push({ nome, ok: true });
+    } catch (erro) {
+      resultados.push({ nome, ok: false, erro: erro.message });
+    }
+  };
+
+  teste('Dinheiro — lê valor brasileiro com milhar', () => igual(parseMoney('1.234,56'), 1234.56));
+  teste('Dinheiro — lê valor brasileiro sem milhar', () => igual(parseMoney('1234,56'), 1234.56));
+  teste('Dinheiro — entrada vazia é inválida', () => igual(Number.isNaN(parseMoney('')), true));
+  teste('Dinheiro — arredonda para dois centavos', () => igual(round2(10.005), 10.01));
+  teste('Caixa — entradas somam e saídas subtraem', () => {
+    igual(calcularSaldoCaixa([{ tipo: 'entrada', valor: 150 }, { tipo: 'saida', valor: 40 }]), 110);
+  });
+  teste('Caixa — saldo após aluguel nunca fica negativo', () => igual(calcularSaldoAposAluguel(300, 500), 0));
+  teste('Caixa — saldo após aluguel preserva a sobra', () => igual(calcularSaldoAposAluguel(800, 500), 300));
+  teste('Aluguel — abatimento não ultrapassa o aluguel', () => igual(calcularAbatimentoAluguel(800, 500), 500));
+  teste('Aluguel — saldo negativo não gera abatimento', () => igual(calcularAbatimentoAluguel(-10, 500), 0));
+  teste('Aluguel — valor líquido alimenta linha, semana e resumo mensal', () => {
+    igual(valorExibidoOcorrencia({ valor: 1000, abatimentoCaixa: 300 }), 700);
+  });
+  teste('Salário — comissão é 25% da venda', () => igual(calcularComissao(199.99), 50));
+  teste('Salário — vendas somam e pagamentos subtraem', () => {
+    igual(calcularSaldoSalario([{ tipo: 'venda', valor: 80 }, { tipo: 'pagamento', valor: 30 }]), 50);
+  });
+  teste('Fiado — pagamentos abatem vendas', () => {
+    igual(calcularSaldoFiado([{ valor: 100 }, { valor: 50 }], [{ valor: 40 }]), 110);
+  });
+  teste('Fiado — aceita pagamento até o saldo', () => igual(podeRegistrarPagamentoFiado(100, 100), true));
+  teste('Fiado — bloqueia pagamento acima do saldo', () => igual(podeRegistrarPagamentoFiado(100.01, 100), false));
+  teste('Fiado — bloqueia remover venda que deixaria pagamentos descobertos', () => {
+    const vendas = [{ id: 'v1', valor: 100 }, { id: 'v2', valor: 50 }];
+    igual(podeRemoverVendaFiado(vendas, [{ valor: 80 }], vendas[0]), false);
+  });
+  teste('Fiado — permite remover venda mantendo saldo suficiente', () => {
+    const vendas = [{ id: 'v1', valor: 100 }, { id: 'v2', valor: 50 }];
+    igual(podeRemoverVendaFiado(vendas, [{ valor: 80 }], vendas[1]), true);
+  });
+
+  teste('Parcelas — modo repetir mantém o valor em todas', () => {
+    igualJson(calcularValoresParcelas(100, 3, 'repetir'), [100, 100, 100]);
+  });
+  teste('Parcelas — modo dividir preserva o total e põe o resto na última', () => {
+    igualJson(calcularValoresParcelas(100, 3, 'dividir'), [33.33, 33.33, 33.34]);
+  });
+  teste('Parcelas — divisão não cria nem perde centavos', () => {
+    igual(round2(calcularValoresParcelas(10, 6, 'dividir').reduce((soma, valor) => soma + valor, 0)), 10);
+  });
+
+  teste('Datas — formata YYYY-MM-DD como DD/MM/AAAA', () => igual(formatDataBR('2026-09-14'), '14/09/2026'));
+  teste('Datas — dia 31 ancora no último dia de fevereiro bissexto', () => {
+    igual(montarDataOcorrencia(2024, 1, 31), '2024-02-29');
+  });
+  teste('Datas — dia 31 ancora no dia 30 de abril', () => igual(montarDataOcorrencia(2026, 3, 31), '2026-04-30'));
+  teste('Semanas — mês iniciado na terça mantém sábado na semana 1', () => igual(semanaDoMes('2026-09-05'), 1));
+  teste('Semanas — domingo inicia uma nova semana', () => igual(semanaDoMes('2026-09-06'), 2));
+  teste('Semanas — avanço cruza o mês e recalcula a semana', () => {
+    igualJson(chaveSemanaSeguinte('2026-09-27'), { ano: 2026, mes: 10, semana: 2, data: '2026-10-04' });
+  });
+  teste('Semanas — agrupamento corta a semana na virada do mês', () => {
+    const grupos = agruparPorSemana([{ data: '2026-09-30' }, { data: '2026-10-01' }]);
+    igual(grupos.length, 2);
+    igualJson(grupos.map((grupo) => [grupo.mes, grupo.itens.length]), [[9, 1], [10, 1]]);
+  });
+
+  teste('Recorrência — respeita início, último dia e data-limite', () => {
+    const conta = { data_inicio: '2024-01-31', dia_vencimento: 31 };
+    igualJson(gerarOcorrenciasRecorrenteAte(conta, new Set(), '2024-04-30'),
+      ['2024-01-31', '2024-02-29', '2024-03-31', '2024-04-30']);
+  });
+  teste('Recorrência — exdate remove somente a ocorrência indicada', () => {
+    const conta = { data_inicio: '2024-01-31', dia_vencimento: 31 };
+    igualJson(gerarOcorrenciasRecorrenteAte(conta, new Set(['2024-02-29']), '2024-03-31'),
+      ['2024-01-31', '2024-03-31']);
+  });
+  teste('Recorrência — pagas futuras continuam ocupando uma das três vagas', () => {
+    const conta = { id: 'c1', data_inicio: '2024-01-31', dia_vencimento: 31 };
+    const pagos = new Set(['c1|2024-01-31', 'c1|2024-03-31']);
+    igualJson(gerarOcorrenciasRecorrenteParaExibir(conta, new Set(['2024-02-29']), pagos, 3, '2024-03-15'),
+      ['2024-03-31', '2024-04-30', '2024-05-31']);
+  });
+  teste('Aluguel — escolhe a primeira ocorrência aberta e ignora nomes aproximados', () => {
+    const contas = [
+      { id: 'a', descricao: ' ALUGUEL ', tipo: 'parcelado' },
+      { id: 'b', descricao: 'Aluguel casa', tipo: 'parcelado' },
+    ];
+    const parcelas = [
+      { conta_id: 'a', data: '2026-09-10', valor: 500 },
+      { conta_id: 'a', data: '2026-10-10', valor: 600 },
+      { conta_id: 'b', data: '2026-08-10', valor: 100 },
+    ];
+    const aluguel = encontrarPrimeiroAluguelAberto(contas, [], parcelas, [{ conta_id: 'a', data: '2026-09-10' }], []);
+    igualJson(aluguel, { data: '2026-10-10', valor: 600 });
+  });
+
+  teste('Interface — as quatro telas usam ícone para voltar ao início', () => {
+    igual(document.querySelectorAll('button[data-nav="home"] svg').length, 4);
+  });
+  teste('Interface — card do Caixa possui os dois saldos', () => {
+    igual(Boolean(document.getElementById('cc-saldo') && document.getElementById('cc-saldo-total')), true);
+  });
+  teste('Interface — descrição de Contas a Pagar é obrigatória', () => {
+    igual(document.getElementById('cp-descricao').required, true);
+  });
+  teste('Parcelas — quantidade é limitada a 24', () => igual(limitarQuantidadeParcelas('99'), 24));
+
+  const lista = document.getElementById('testes-lista');
+  resultados.forEach((resultado) => {
+    const item = document.createElement('li');
+    item.className = resultado.ok ? 'teste-ok' : 'teste-falhou';
+    item.textContent = resultado.ok ? `✓ ${resultado.nome}` : `✕ ${resultado.nome}: ${resultado.erro}`;
+    lista.appendChild(item);
+  });
+
+  const aprovados = resultados.filter((resultado) => resultado.ok).length;
+  const resumo = document.getElementById('testes-resumo');
+  resumo.textContent = `${aprovados}/${resultados.length} testes aprovados`;
+  resumo.className = `testes-resumo ${aprovados === resultados.length ? 'teste-ok' : 'teste-falhou'}`;
+}
+
+if (new URLSearchParams(window.location.search).has('testes')) {
+  executarTestes();
+} else {
+  checkSession();
+}

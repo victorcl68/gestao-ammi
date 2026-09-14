@@ -25,6 +25,7 @@ delas não é óbvia lendo o código e nenhuma está registrada em outro lugar.
   - [Agrupamento por semana](#agrupamento-por-semana)
 - [Módulo: Fiado](#módulo-fiado)
 - [Regras transversais](#regras-transversais)
+- [Testes de regressão](#testes-de-regressão)
 - [Comportamentos conhecidos e limitações](#comportamentos-conhecidos-e-limitações)
 
 ---
@@ -601,6 +602,41 @@ O valor exibido ali tem significado **diferente** conforme o tipo:
 
 Ajustes pontuais de contas mensais não aparecem nesse número — ele mostra
 sempre o valor padrão da conta.
+
+---
+
+## Testes de regressão
+
+A suíte fica no próprio `app.js`, sem framework ou dependência adicional. Para
+executá-la, abra a aplicação acrescentando `?testes=1` ao endereço. Exemplo:
+
+```
+https://endereco-da-aplicacao/?testes=1
+```
+
+Esse modo não autentica, não consulta o Supabase e não altera dados. Ele exibe
+uma lista com cada caso aprovado ou reprovado.
+
+As verificações automatizadas cobrem as regras determinísticas mais sensíveis:
+
+- leitura e arredondamento de dinheiro;
+- saldo do Caixa, abatimento do aluguel e limite em zero;
+- comissão e saldo do Salário;
+- saldo, limite de pagamento e proteção ao remover vendas do Fiado;
+- repetição, divisão, centavos e limite de 24 parcelas;
+- datas, meses sem dia 31 e ano bissexto;
+- semanas iniciadas no domingo e corte na virada do mês;
+- recorrências, exdates e ocupação das três vagas futuras;
+- escolha exata do primeiro `Aluguel` aberto;
+- contratos essenciais do HTML, como os ícones de início e os dois saldos do
+  Caixa Casa.
+
+Continuam manuais as verificações que dependem do banco ou de interação real:
+RLS, cascatas, constraints SQL, sessão de 9 horas, cadastro público desativado,
+operações efetivas no Supabase, confirmações destrutivas e aparência responsiva.
+As migrations preservam essas garantias no banco, mas testá-las de verdade
+exigiria um Supabase separado para testes — complexidade que este projeto ainda
+não justifica.
 
 ---
 
