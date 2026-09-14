@@ -16,6 +16,18 @@ reversíveis.
 Se uma mudança alterar alguma regra descrita lá, **atualize o REGRAS.md no
 mesmo commit**. Documentação desatualizada é pior que documentação ausente.
 
+## Toda mudança atualiza regras e testes
+
+Toda nova feature ou mudança no projeto deve atualizar, no mesmo trabalho:
+
+1. O `REGRAS.md`, documentando o comportamento novo ou alterado
+2. Os testes de regressão, adicionando ou ajustando casos que protejam esse
+   comportamento
+
+A mudança só é considerada concluída quando documentação e testes também
+estiverem coerentes com o código. Ao finalizar, informe quais testes foram
+executados; se não puder executá-los, diga isso explicitamente.
+
 ## Preferências de trabalho
 
 ### Evite overengineering, sempre
