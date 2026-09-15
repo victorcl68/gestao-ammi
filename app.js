@@ -19,7 +19,6 @@ const FI_PESSOAS_TABLE = 'fiado_pessoas';
 const FI_VENDAS_TABLE = 'fiado_vendas';
 const FI_PAGAMENTOS_TABLE = 'fiado_pagamentos';
 const PERCENTUAL_COMISSAO = 0.25;
-const PERCENTUAL_EMPRESTIMO_VENDAS = 0.25;
 
 // ===================== HELPERS: dinheiro / data =====================
 
@@ -81,10 +80,6 @@ function calcularComissao(valorVenda) {
   return round2(valorVenda * PERCENTUAL_COMISSAO);
 }
 
-function calcularAporteVendaEmprestimo(valorVenda) {
-  return round2(valorVenda * PERCENTUAL_EMPRESTIMO_VENDAS);
-}
-
 function calcularSaldoSalario(lancamentos) {
   return round2(lancamentos.reduce((acc, item) => {
     return acc + (item.tipo === 'venda' ? Number(item.valor) : -Number(item.valor));
@@ -124,6 +119,16 @@ function calcularSaldoEmprestimo(valorOriginal, totalAportes) {
 
 function limitarAporteEmprestimo(valorAporte, valorRestante) {
   return Math.min(round2(Number(valorAporte)), Number(valorRestante));
+}
+
+function dadosAporteManual(contaId, dataOcorrencia, valor, data) {
+  return {
+    conta_id: contaId,
+    data_ocorrencia: dataOcorrencia,
+    valor,
+    origem: 'manual',
+    data,
+  };
 }
 
 function somarAportesPorOcorrencia(aportes) {
@@ -503,60 +508,6 @@ async function carregarSalario() {
   }).join('');
 }
 
-async function registrarAporteAutomaticoDaVenda(salarioLancamentoId, valorVenda, dataVenda) {
-  const [
-    { data: contas, error: errContas },
-    { data: exdatesRows, error: errEx },
-    { data: parcelasRows, error: errParc },
-    { data: pagos, error: errPag },
-    { data: ajustesRows, error: errAjustes },
-    { data: aportes, error: errAportes },
-  ] = await Promise.all([
-    supabase.from(CP_TABLE).select('*').order('data_inicio', { ascending: true }),
-    supabase.from(CP_EXDATES_TABLE).select('*'),
-    supabase.from(CP_PARCELAS_TABLE).select('*'),
-    supabase.from(CP_PAGAMENTOS_TABLE).select('*'),
-    supabase.from(CP_AJUSTES_TABLE).select('*'),
-    supabase.from(EMPRESTIMO_APORTES_TABLE).select('*'),
-  ]);
-
-  if (errContas || errEx || errParc || errPag || errAjustes || errAportes) {
-    return { error: true, houveAporte: false };
-  }
-
-  const emprestimo = encontrarPrimeiroEmprestimoAberto(
-    contas,
-    exdatesRows,
-    parcelasRows,
-    pagos,
-    ajustesRows,
-    aportes
-  );
-  if (!emprestimo) return { error: false, houveAporte: false };
-
-  const valorAporte = limitarAporteEmprestimo(calcularAporteVendaEmprestimo(valorVenda), emprestimo.valorRestante);
-  if (valorAporte <= 0) return { error: false, houveAporte: false };
-
-  const { error } = await supabase.from(EMPRESTIMO_APORTES_TABLE).insert({
-    conta_id: emprestimo.conta.id,
-    data_ocorrencia: emprestimo.data,
-    valor: valorAporte,
-    origem: 'venda',
-    salario_lancamento_id: salarioLancamentoId,
-    data: dataVenda,
-  });
-  if (error) return { error: true, houveAporte: false };
-
-  if (valorAporte >= emprestimo.valorRestante) {
-    await supabase.from(CP_PAGAMENTOS_TABLE).upsert({
-      conta_id: emprestimo.conta.id,
-      data: emprestimo.data,
-    });
-  }
-
-  return { error: false, houveAporte: true };
-}
-
 bloquearDuranteSubmit(salVendaForm, async (e) => {
   e.preventDefault();
   salVendaErrorEl.hidden = true;
@@ -573,13 +524,13 @@ bloquearDuranteSubmit(salVendaForm, async (e) => {
 
   const comissao = calcularComissao(vendaBase);
 
-  const { data: vendaCriada, error } = await supabase.from(SAL_TABLE).insert({
+  const { error } = await supabase.from(SAL_TABLE).insert({
     tipo: 'venda',
     valor: comissao,
     venda_base: vendaBase,
     descricao: descricao || null,
     data,
-  }).select('id').single();
+  });
 
   if (error) {
     salVendaErrorEl.textContent = 'Erro ao salvar. Tente novamente.';
@@ -587,17 +538,10 @@ bloquearDuranteSubmit(salVendaForm, async (e) => {
     return;
   }
 
-  const aporte = await registrarAporteAutomaticoDaVenda(vendaCriada.id, vendaBase, data);
-
   salVendaForm.reset();
   salVendaDataInput.value = hojeISO();
   updateSalVendaSubmitLabel();
   await carregarSalario();
-  await carregarContasPagar();
-  if (aporte.error) {
-    salVendaErrorEl.textContent = 'Venda salva, mas o aporte do Empréstimo falhou. Confira a migration 006.';
-    salVendaErrorEl.hidden = false;
-  }
 });
 
 bloquearDuranteSubmit(salPagamentoForm, async (e) => {
@@ -804,47 +748,6 @@ function encontrarPrimeiroAluguelAberto(contas, exdatesRows, parcelasRows, pagos
 
   alugueisAbertos.sort((a, b) => a.data.localeCompare(b.data));
   return alugueisAbertos[0] || null;
-}
-
-function encontrarPrimeiroEmprestimoAberto(contas, exdatesRows, parcelasRows, pagos, ajustesRows, aportes) {
-  const pagosSet = new Set(pagos.map((pagamento) => `${pagamento.conta_id}|${pagamento.data}`));
-  const ajustesMap = new Map(ajustesRows.map((ajuste) => [`${ajuste.conta_id}|${ajuste.data}`, Number(ajuste.valor)]));
-  const aportesMap = somarAportesPorOcorrencia(aportes);
-  const emprestimosAbertos = [];
-
-  contas.filter(ehEmprestimo).forEach((conta) => {
-    let ocorrencias;
-    if (conta.tipo === 'parcelado') {
-      ocorrencias = parcelasRows
-        .filter((parcela) => parcela.conta_id === conta.id)
-        .map((parcela) => ({ data: parcela.data, valorOriginal: Number(parcela.valor) }));
-    } else {
-      const exdates = new Set(
-        exdatesRows.filter((exdate) => exdate.conta_id === conta.id).map((exdate) => exdate.data)
-      );
-      ocorrencias = gerarOcorrenciasRecorrenteParaExibir(
-        conta,
-        exdates,
-        pagosSet,
-        pagos.length + aportes.length + 1
-      ).map((data) => ({
-        data,
-        valorOriginal: ajustesMap.get(`${conta.id}|${data}`) ?? Number(conta.valor),
-      }));
-    }
-
-    ocorrencias.forEach((ocorrencia) => {
-      const chave = `${conta.id}|${ocorrencia.data}`;
-      const totalAportes = aportesMap.get(chave) || 0;
-      const valorRestante = calcularSaldoEmprestimo(ocorrencia.valorOriginal, totalAportes);
-      if (!pagosSet.has(chave) && valorRestante > 0) {
-        emprestimosAbertos.push({ conta, ...ocorrencia, totalAportes, valorRestante });
-      }
-    });
-  });
-
-  emprestimosAbertos.sort((a, b) => a.data.localeCompare(b.data));
-  return emprestimosAbertos[0] || null;
 }
 
 async function carregarContasPagar() {
@@ -1156,13 +1059,9 @@ cpListEl.addEventListener('click', async (e) => {
 
     const valorRestante = Number(aporteBtn.dataset.restante);
     const valorAporte = limitarAporteEmprestimo(valorInformado, valorRestante);
-    const { error } = await supabase.from(EMPRESTIMO_APORTES_TABLE).insert({
-      conta_id: aporteBtn.dataset.contaId,
-      data_ocorrencia: aporteBtn.dataset.data,
-      valor: valorAporte,
-      origem: 'manual',
-      data: hojeISO(),
-    });
+    const { error } = await supabase.from(EMPRESTIMO_APORTES_TABLE).insert(
+      dadosAporteManual(aporteBtn.dataset.contaId, aporteBtn.dataset.data, valorAporte, hojeISO())
+    );
 
     if (error) {
       alert('Erro ao registrar o aporte. Confira se a migration 006 foi aplicada.');
@@ -1639,8 +1538,10 @@ function executarTestes() {
     igual(valorExibidoOcorrencia({ valor: 1000, abatimentoCaixa: 300 }), 700);
   });
   teste('Salário — comissão é 25% da venda', () => igual(calcularComissao(199.99), 50));
-  teste('Empréstimo — aporte automático é 25% da venda bruta', () => {
-    igual(calcularAporteVendaEmprestimo(199.99), 50);
+  teste('Empréstimo — aporte informado grava somente origem manual', () => {
+    igualJson(dadosAporteManual('e1', '2026-09-10', 50, '2026-09-15'), {
+      conta_id: 'e1', data_ocorrencia: '2026-09-10', valor: 50, origem: 'manual', data: '2026-09-15',
+    });
   });
   teste('Empréstimo — aportes reduzem o saldo sem deixá-lo negativo', () => {
     igual(calcularSaldoEmprestimo(1000, 1250), 0);
@@ -1650,28 +1551,16 @@ function executarTestes() {
   });
   teste('Empréstimo — soma o histórico por ocorrência', () => {
     const totais = somarAportesPorOcorrencia([
-      { conta_id: 'e1', data_ocorrencia: '2026-09-10', valor: 25 },
-      { conta_id: 'e1', data_ocorrencia: '2026-09-10', valor: 12.5 },
-      { conta_id: 'e1', data_ocorrencia: '2026-10-10', valor: 10 },
+      { conta_id: 'e1', data_ocorrencia: '2026-09-10', valor: 25, origem: 'venda' },
+      { conta_id: 'e1', data_ocorrencia: '2026-09-10', valor: 12.5, origem: 'manual' },
+      { conta_id: 'e1', data_ocorrencia: '2026-10-10', valor: 10, origem: 'manual' },
     ]);
     igual(totais.get('e1|2026-09-10'), 37.5);
     igual(totais.get('e1|2026-10-10'), 10);
   });
-  teste('Empréstimo — escolhe o primeiro aberto e ignora nome aproximado', () => {
-    const contas = [
-      { id: 'e1', descricao: ' EMPRÉSTIMO ', tipo: 'parcelado' },
-      { id: 'e2', descricao: 'Empréstimo banco', tipo: 'parcelado' },
-    ];
-    const parcelas = [
-      { conta_id: 'e1', data: '2026-09-10', valor: 500 },
-      { conta_id: 'e1', data: '2026-10-10', valor: 600 },
-      { conta_id: 'e2', data: '2026-08-10', valor: 100 },
-    ];
-    const aportes = [{ conta_id: 'e1', data_ocorrencia: '2026-09-10', valor: 200 }];
-    const emprestimo = encontrarPrimeiroEmprestimoAberto(contas, [], parcelas, [], [], aportes);
-    igual(emprestimo.data, '2026-09-10');
-    igual(emprestimo.totalAportes, 200);
-    igual(emprestimo.valorRestante, 300);
+  teste('Empréstimo — nome aproximado não recebe tratamento especial', () => {
+    igual(ehEmprestimo({ descricao: ' EMPRÉSTIMO ' }), true);
+    igual(ehEmprestimo({ descricao: 'Empréstimo banco' }), false);
   });
   teste('Salário — vendas somam e pagamentos subtraem', () => {
     igual(calcularSaldoSalario([{ tipo: 'venda', valor: 80 }, { tipo: 'pagamento', valor: 30 }]), 50);

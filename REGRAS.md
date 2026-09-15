@@ -5,7 +5,7 @@ Não trata de stack, setup ou como rodar — só do que o sistema faz e por quê
 O objetivo é que essas regras não se percam com o tempo, já que boa parte
 delas não é óbvia lendo o código e nenhuma está registrada em outro lugar.
 
-Última revisão: 2026-09-15 (semanas colapsáveis em Contas a Pagar).
+Última revisão: 2026-09-15 (aportes somente manuais no Empréstimo).
 
 ---
 
@@ -38,10 +38,8 @@ Caixa Casa e Contas a Pagar se comunicam na exibição do primeiro aluguel
 aberto, conforme a regra documentada em [Abatimento do Caixa Casa no
 aluguel](#abatimento-do-caixa-casa-no-aluguel).
 
-Uma venda lançada no módulo Salário também pode gerar um aporte no primeiro
-Empréstimo aberto em Contas a Pagar. Esse aporte usa 25% da venda bruta, mas é
-uma regra independente da comissão salarial, mesmo que os dois percentuais
-sejam atualmente iguais.
+Uma venda lançada no módulo Salário cria apenas a comissão salarial. Ela não
+gera aporte no Empréstimo; aportes são feitos pela ação manual em Contas a Pagar.
 
 Pagar uma conta em Contas a Pagar **não** cria um débito no Caixa Casa. O
 abatimento do aluguel é apenas uma projeção visual do valor que ainda falta;
@@ -161,23 +159,11 @@ Quando você lança uma venda:
 O botão "Salvar" mostra em tempo real a comissão que será gravada
 (`Salvar — R$ 25,00`), para conferência antes de confirmar.
 
-### Aporte automático no Empréstimo
+### Sem aporte ao salvar uma venda
 
-Ao salvar uma venda, o sistema procura a primeira ocorrência aberta cuja
-conta se chame exatamente `Empréstimo`. Se existir, registra nela um aporte:
-
-```
-aporte = valor_bruto_da_venda × 0,25
-```
-
-O aporte nunca ultrapassa o saldo restante do Empréstimo. A comissão da
-gerente continua sendo criada normalmente e não é reduzida nem substituída
-por esse aporte. Cada venda pode gerar no máximo um aporte, garantido pelo
-índice único de `salario_lancamento_id`.
-
-Se não houver Empréstimo aberto, a venda é salva normalmente e nenhum aporte
-é criado. Se a venda for salva mas o aporte falhar, a interface informa
-explicitamente a falha para que ela não passe despercebida.
+Salvar uma venda registra somente a comissão da gerente. O valor bruto da venda
+não é usado para reduzir nenhum Empréstimo. Para reduzir o saldo do Empréstimo,
+é preciso usar manualmente o botão **Aporte** na ocorrência desejada.
 
 ### Pagamento
 
@@ -258,12 +244,12 @@ saldo_restante = max(valor_original − soma_dos_aportes, 0)
 Cada linha também mostra o total já aportado. O botão **Aporte** aceita um
 pagamento parcial manual; se o valor informado ultrapassar o saldo, somente o
 necessário para zerar é registrado. Ao chegar a zero, a ocorrência é
-considerada paga automaticamente e não aceita novos aportes.
+considerada paga e não aceita novos aportes.
 
-Os aportes ficam em `emprestimo_aportes`, um por linha, com origem `manual` ou
-`venda`, data e vínculo opcional com a venda do módulo Salário. Excluir a conta
-remove seus aportes em cascata. Excluir diretamente uma venda no banco não
-remove o aporte já realizado: o vínculo vira nulo para preservar o histórico.
+Os aportes novos ficam em `emprestimo_aportes`, um por linha, sempre com origem
+`manual` e data. A estrutura do banco ainda admite a origem `venda` para
+preservar eventuais aportes feitos antes desta mudança; eles continuam entrando
+no saldo e não são apagados. Excluir a conta remove seus aportes em cascata.
 
 No resumo mensal, aportes feitos no Empréstimo contam como valor pago e o
 saldo restante conta como valor não pago. Nos totais da semana e na linha da
@@ -681,7 +667,7 @@ As verificações automatizadas cobrem as regras determinísticas mais sensívei
 - leitura e arredondamento de dinheiro;
 - saldo do Caixa, abatimento do aluguel e limite em zero;
 - comissão e saldo do Salário;
-- aporte de 25% da venda bruta, saldo e limite de aportes do Empréstimo;
+- dados do aporte manual, saldo, limite e preservação de aportes antigos do Empréstimo;
 - saldo, limite de pagamento e proteção ao remover vendas do Fiado;
 - repetição, divisão, centavos e limite de 24 parcelas;
 - datas, meses sem dia 31 e ano bissexto;
