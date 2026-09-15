@@ -100,30 +100,14 @@ body {
 
 .btn-aporte {
   flex-shrink: 0;
-  padding: 6px 8px;
-  border: 1px solid var(--primary);
-  border-radius: 8px;
   color: var(--primary-dark);
-  background: transparent;
-  font-size: 12px;
+  font-size: 22px;
   font-weight: 700;
-  cursor: pointer;
+  line-height: 16px;
 }
 
 .emprestimo-grupo {
   margin-bottom: 24px;
-}
-
-.emprestimo-grupo .lancamento-item {
-  flex-wrap: wrap;
-}
-
-.emprestimo-grupo .lancamento-checkbox {
-  flex: 1 1 calc(100% - 100px);
-}
-
-.emprestimo-grupo .btn-aporte {
-  margin-left: auto;
 }
 
 .card {

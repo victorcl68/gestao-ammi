@@ -949,7 +949,7 @@ async function carregarContasPagar() {
     const { conta, data, valor, valorOriginal, emprestimo, paga, atrasada } = ocorrencia;
     const valorExibido = valorExibidoOcorrencia(ocorrencia);
     const botaoAporte = emprestimo && !paga ? `
-        <button type="button" class="btn-aporte cp-aporte-btn" data-conta-id="${conta.id}" data-data="${data}" data-restante="${valor}" aria-label="Fazer aporte" title="Fazer aporte">+ Aporte</button>` : '';
+        <button type="button" class="btn-icon btn-aporte cp-aporte-btn" data-conta-id="${conta.id}" data-data="${data}" data-restante="${valor}" aria-label="Fazer aporte" title="Fazer aporte">+</button>` : '';
     const botoesAcao = paga ? '' : `
         ${botaoAporte}
         <button type="button" class="btn-icon btn-icon-neutro cp-editar-btn" data-conta-id="${conta.id}" data-data="${data}" data-tipo="${conta.tipo}" data-valor="${valorOriginal}" aria-label="Editar valor" title="Editar valor">
@@ -1671,23 +1671,27 @@ function executarTestes() {
   teste('Interface — descrição de Contas a Pagar é obrigatória', () => {
     igual(document.getElementById('cp-descricao').required, true);
   });
-  teste('Interface — valor do Empréstimo fica ao lado da descrição', () => {
+  teste('Interface — valor e ícones do Empréstimo seguem a mesma linha', () => {
     const fixture = document.createElement('div');
     fixture.className = 'emprestimo-grupo';
-    fixture.style.cssText = 'position:absolute;left:-10000px;top:0;width:300px';
+    fixture.style.cssText = 'position:absolute;left:-10000px;top:0;width:400px';
     fixture.innerHTML = '<div class="lancamento-item"><label class="lancamento-checkbox">'
       + '<input type="checkbox" disabled><div class="lancamento-info">'
       + '<span class="lancamento-desc">Empréstimo</span>'
       + '<span class="lancamento-data">18/11/2026</span></div></label>'
       + '<span class="lancamento-valor negativo">R$ 500,00</span>'
-      + '<button class="btn-aporte">Aporte</button><button class="btn-icon">Editar</button>'
+      + '<button class="btn-icon btn-aporte">+</button><button class="btn-icon">Editar</button>'
       + '<button class="btn-icon">Pular</button></div>';
     document.body.appendChild(fixture);
     try {
+      const item = fixture.querySelector('.lancamento-item');
       const label = fixture.querySelector('.lancamento-checkbox').getBoundingClientRect();
       const valor = fixture.querySelector('.lancamento-valor').getBoundingClientRect();
+      const aporte = fixture.querySelector('.btn-aporte').getBoundingClientRect();
       igual(valor.left >= label.right, true);
       igual(valor.top < label.bottom && valor.bottom > label.top, true);
+      igual(aporte.left >= valor.right, true);
+      igual(getComputedStyle(item).flexWrap, 'nowrap');
     } finally {
       fixture.remove();
     }

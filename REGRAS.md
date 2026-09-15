@@ -5,7 +5,7 @@ Não trata de stack, setup ou como rodar — só do que o sistema faz e por quê
 O objetivo é que essas regras não se percam com o tempo, já que boa parte
 delas não é óbvia lendo o código e nenhuma está registrada em outro lugar.
 
-Última revisão: 2026-09-15 (linha do Empréstimo sem texto de aportado).
+Última revisão: 2026-09-15 (ícone de aporte ao lado do valor do Empréstimo).
 
 ---
 
@@ -245,7 +245,8 @@ saldo_restante = max(valor_original − soma_dos_aportes, 0)
 
 Cada linha mostra a descrição, a data e o saldo restante com o valor alinhado
 como nas demais ocorrências. O total aportado não aparece como texto na linha;
-ele continua abatendo o saldo restante. O botão **Aporte** aceita um pagamento
+ele continua abatendo o saldo restante. Após o valor ficam os ícones de ação,
+como nas demais ocorrências. O ícone **+** ("Fazer aporte") aceita um pagamento
 parcial manual; se o valor informado ultrapassar o saldo, somente o necessário
 para zerar é registrado. Ao chegar a zero, a ocorrência é considerada paga e
 não aceita novos aportes.
@@ -676,7 +677,7 @@ As verificações automatizadas cobrem as regras determinísticas mais sensívei
 - saldo do Caixa, abatimento do aluguel e limite em zero;
 - comissão e saldo do Salário;
 - dados do aporte manual, saldo, limite e preservação de aportes antigos do Empréstimo;
-- alinhamento do valor restante do Empréstimo como nas demais ocorrências;
+- alinhamento do valor e dos ícones do Empréstimo como nas demais ocorrências;
 - saldo, limite de pagamento e proteção ao remover vendas do Fiado;
 - repetição, divisão, centavos e limite de 24 parcelas;
 - datas, meses sem dia 31 e ano bissexto;
