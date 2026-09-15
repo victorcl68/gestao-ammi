@@ -119,24 +119,11 @@ body {
 }
 
 .emprestimo-grupo .lancamento-checkbox {
-  flex: 0 0 100%;
+  flex: 1 1 calc(100% - 100px);
 }
 
-.emprestimo-meta {
-  display: flex;
-  flex-wrap: wrap;
-  column-gap: 8px;
-  row-gap: 2px;
-}
-
-.emprestimo-meta > span {
-  white-space: nowrap;
-}
-
-@media (max-width: 480px) {
-  .emprestimo-grupo .btn-aporte {
-    margin-left: auto;
-  }
+.emprestimo-grupo .btn-aporte {
+  margin-left: auto;
 }
 
 .card {

@@ -946,7 +946,7 @@ async function carregarContasPagar() {
   }
 
   function renderizarItemOcorrencia(ocorrencia) {
-    const { conta, data, valor, valorOriginal, totalAportes, emprestimo, paga, atrasada } = ocorrencia;
+    const { conta, data, valor, valorOriginal, emprestimo, paga, atrasada } = ocorrencia;
     const valorExibido = valorExibidoOcorrencia(ocorrencia);
     const botaoAporte = emprestimo && !paga ? `
         <button type="button" class="btn-aporte cp-aporte-btn" data-conta-id="${conta.id}" data-data="${data}" data-restante="${valor}" aria-label="Fazer aporte" title="Fazer aporte">+ Aporte</button>` : '';
@@ -971,9 +971,7 @@ async function carregarContasPagar() {
           <input type="checkbox" data-conta-id="${conta.id}" data-data="${data}" class="cp-pago-checkbox" ${paga ? 'checked' : ''} ${emprestimo ? 'disabled' : ''}>
           <div class="lancamento-info">
             <span class="lancamento-desc">${conta.descricao}${atrasada ? ' <span class="tag-atrasada">Atrasada</span>' : ''}</span>
-            <span class="lancamento-data${emprestimo ? ' emprestimo-meta' : ''}">${emprestimo
-              ? `<span>${formatDataBR(data)}</span><span>Aportado: ${formatMoney(totalAportes)}</span>`
-              : formatDataBR(data)}</span>
+            <span class="lancamento-data">${formatDataBR(data)}</span>
           </div>
         </label>
         <span class="lancamento-valor negativo">${formatMoney(valorExibido)}</span>${botoesAcao}
@@ -1673,23 +1671,23 @@ function executarTestes() {
   teste('Interface — descrição de Contas a Pagar é obrigatória', () => {
     igual(document.getElementById('cp-descricao').required, true);
   });
-  teste('Interface — data e aporte do Empréstimo ficam juntos em largura estreita', () => {
+  teste('Interface — valor do Empréstimo fica ao lado da descrição', () => {
     const fixture = document.createElement('div');
     fixture.className = 'emprestimo-grupo';
     fixture.style.cssText = 'position:absolute;left:-10000px;top:0;width:300px';
     fixture.innerHTML = '<div class="lancamento-item"><label class="lancamento-checkbox">'
       + '<input type="checkbox" disabled><div class="lancamento-info">'
       + '<span class="lancamento-desc">Empréstimo</span>'
-      + '<span class="lancamento-data emprestimo-meta"><span>18/11/2026</span>'
-      + '<span>Aportado: R$ 0,00</span></span></div></label>'
+      + '<span class="lancamento-data">18/11/2026</span></div></label>'
       + '<span class="lancamento-valor negativo">R$ 500,00</span>'
       + '<button class="btn-aporte">Aporte</button><button class="btn-icon">Editar</button>'
       + '<button class="btn-icon">Pular</button></div>';
     document.body.appendChild(fixture);
     try {
-      const [data, aportado] = fixture.querySelectorAll('.emprestimo-meta > span');
-      igual(Math.round(data.getBoundingClientRect().top), Math.round(aportado.getBoundingClientRect().top));
-      igual(getComputedStyle(aportado).whiteSpace, 'nowrap');
+      const label = fixture.querySelector('.lancamento-checkbox').getBoundingClientRect();
+      const valor = fixture.querySelector('.lancamento-valor').getBoundingClientRect();
+      igual(valor.left >= label.right, true);
+      igual(valor.top < label.bottom && valor.bottom > label.top, true);
     } finally {
       fixture.remove();
     }
