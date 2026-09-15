@@ -587,10 +587,19 @@ const cpLabelSemanaAtualEl = document.getElementById('cp-label-semana-atual');
 const cpLabelProximaSemanaEl = document.getElementById('cp-label-proxima-semana');
 const cpListEl = document.getElementById('cp-list');
 const cpContasListEl = document.getElementById('cp-contas-list');
-function capturarSemanasAbertas() {
-  return new Map([...cpListEl.querySelectorAll('.semana-details')]
-    .map((details) => [details.dataset.semana, details.open]));
+const cpGruposAlteradosManualmente = new Map();
+
+function abrirGrupoPorPadrao(itens, ehSemanaAtual = false) {
+  return ehSemanaAtual || itens.some((item) => !item.paga);
 }
+
+cpListEl.addEventListener('click', (e) => {
+  const summary = e.target.closest('summary');
+  const details = summary?.parentElement;
+  if (!details?.classList.contains('cp-grupo-details')) return;
+  cpGruposAlteradosManualmente.set(details.dataset.grupo, !details.open);
+});
+
 const cpForm = document.getElementById('cp-form');
 const cpErrorEl = document.getElementById('cp-form-error');
 const cpDescricaoInput = document.getElementById('cp-descricao');
@@ -971,18 +980,17 @@ async function carregarContasPagar() {
   }
 
   function renderizarGruposSemana(grupos) {
-    const semanasAbertas = capturarSemanasAbertas();
     return grupos.map((grupo) => {
       const ehSemanaAtual = ehGrupoDaSemanaAtual(grupo);
       const itensHtml = grupo.itens.map(renderizarItemOcorrencia).join('');
       const rotuloSemana = `Semana ${grupo.semana}`;
       const totalGrupo = grupo.itens.reduce((acc, item) => acc + valorExibidoOcorrencia(item), 0);
       const chaveSemana = `${grupo.ano}-${grupo.mes}-${grupo.semana}`;
-      const aberta = semanasAbertas.get(chaveSemana) ?? true;
+      const aberta = cpGruposAlteradosManualmente.get(chaveSemana) ?? abrirGrupoPorPadrao(grupo.itens, ehSemanaAtual);
 
       return `
         <li class="semana-grupo">
-          <details class="semana-details" data-semana="${chaveSemana}"${aberta ? ' open' : ''}>
+          <details class="cp-grupo-details" data-grupo="${chaveSemana}"${aberta ? ' open' : ''}>
             <summary class="semana-grupo-titulo${ehSemanaAtual ? ' semana-atual' : ''}">
               <span>${NOMES_MES[grupo.mes - 1]} — ${rotuloSemana}${ehSemanaAtual ? '<span class="semana-atual-dot"></span>' : ''}</span>
               <span class="semana-grupo-total">${formatMoney(totalGrupo)}</span>
@@ -996,13 +1004,16 @@ async function carregarContasPagar() {
 
   const ocorrenciasEmprestimo = ocorrenciasParaExibir.filter((ocorrencia) => ocorrencia.emprestimo);
   const demaisOcorrencias = ocorrenciasParaExibir.filter((ocorrencia) => !ocorrencia.emprestimo);
+  const emprestimosAbertos = cpGruposAlteradosManualmente.get('emprestimo') ?? abrirGrupoPorPadrao(ocorrenciasEmprestimo);
   const emprestimosHtml = ocorrenciasEmprestimo.length === 0 ? '' : `
     <li class="semana-grupo emprestimo-grupo">
-      <span class="semana-grupo-titulo">
-        <span>Empréstimo</span>
-        <span class="semana-grupo-total">${formatMoney(ocorrenciasEmprestimo.reduce((acc, item) => acc + item.valor, 0))}</span>
-      </span>
-      <ul class="lancamentos">${ocorrenciasEmprestimo.map(renderizarItemOcorrencia).join('')}</ul>
+      <details class="cp-grupo-details" data-grupo="emprestimo"${emprestimosAbertos ? ' open' : ''}>
+        <summary class="semana-grupo-titulo">
+          <span>Empréstimo</span>
+          <span class="semana-grupo-total">${formatMoney(ocorrenciasEmprestimo.reduce((acc, item) => acc + item.valor, 0))}</span>
+        </summary>
+        <ul class="lancamentos">${ocorrenciasEmprestimo.map(renderizarItemOcorrencia).join('')}</ul>
+      </details>
     </li>
   `;
   cpListEl.innerHTML = emprestimosHtml + renderizarGruposSemana(agruparPorSemana(demaisOcorrencias));
@@ -1604,13 +1615,20 @@ function executarTestes() {
     igual(grupos.length, 2);
     igualJson(grupos.map((grupo) => [grupo.mes, grupo.itens.length]), [[9, 1], [10, 1]]);
   });
-  teste('Semanas — mantém o estado aberto ou fechado por semana ao recarregar', () => {
-    cpListEl.innerHTML = '<li><details class="semana-details" data-semana="2026-9-1" open><summary>Semana 1</summary></details></li>'
-      + '<li><details class="semana-details" data-semana="2026-9-2"><summary>Semana 2</summary></details></li>';
-    const semanasAbertas = capturarSemanasAbertas();
-    igual(semanasAbertas.get('2026-9-1'), true);
-    igual(semanasAbertas.get('2026-9-2'), false);
-    igual(semanasAbertas.get('2026-9-3') ?? true, true);
+  teste('Ocorrências — abre só a semana atual e blocos com pendências', () => {
+    igual(abrirGrupoPorPadrao([{ paga: true }], true), true);
+    igual(abrirGrupoPorPadrao([{ paga: true }]), false);
+    igual(abrirGrupoPorPadrao([{ paga: true }, { paga: false }]), true);
+  });
+  teste('Ocorrências — preserva o estado escolhido por semana e Empréstimo', () => {
+    cpListEl.innerHTML = '<li><details class="cp-grupo-details" data-grupo="2026-9-1" open><summary>Semana 1</summary></details></li>'
+      + '<li><details class="cp-grupo-details" data-grupo="2026-9-2"><summary>Semana 2</summary></details></li>'
+      + '<li><details class="cp-grupo-details" data-grupo="emprestimo" open><summary>Empréstimo</summary></details></li>';
+    cpListEl.querySelectorAll('.cp-grupo-details > summary').forEach((summary) => summary.click());
+    igual(cpGruposAlteradosManualmente.get('2026-9-1'), false);
+    igual(cpGruposAlteradosManualmente.get('2026-9-2'), true);
+    igual(cpGruposAlteradosManualmente.get('emprestimo'), false);
+    cpGruposAlteradosManualmente.clear();
     cpListEl.innerHTML = '';
   });
 

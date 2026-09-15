@@ -532,18 +532,24 @@ button[type="submit"]:disabled {
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
+  justify-content: flex-start;
 }
 
-.list .semana-details:not([open]) .semana-grupo-titulo {
+.list .semana-grupo-titulo > span:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.list .cp-grupo-details:not([open]) .semana-grupo-titulo {
   margin-bottom: 0;
 }
 
-.list .semana-details .semana-grupo-titulo::before {
+.list .cp-grupo-details .semana-grupo-titulo::before {
   transform: none;
   flex-shrink: 0;
 }
 
-.list .semana-details[open] .semana-grupo-titulo::before {
+.list .cp-grupo-details[open] .semana-grupo-titulo::before {
   transform: rotate(90deg);
 }
 

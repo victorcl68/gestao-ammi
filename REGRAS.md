@@ -5,7 +5,7 @@ Não trata de stack, setup ou como rodar — só do que o sistema faz e por quê
 O objetivo é que essas regras não se percam com o tempo, já que boa parte
 delas não é óbvia lendo o código e nenhuma está registrada em outro lugar.
 
-Última revisão: 2026-09-15 (aportes somente manuais no Empréstimo).
+Última revisão: 2026-09-15 (abertura seletiva dos blocos de ocorrências).
 
 ---
 
@@ -234,6 +234,8 @@ especial. O uso esperado é uma conta Parcelada com uma única data.
 Todas as ocorrências chamadas `Empréstimo` ficam em um bloco próprio no topo
 da lista, antes de qualquer semana, independentemente da data. A data original
 continua visível.
+Esse bloco pode ser colapsado; começa aberto quando existe ao menos um
+Empréstimo não pago e fechado quando todos estão pagos.
 
 O valor mostrado é o saldo restante:
 
@@ -510,10 +512,14 @@ Implicações que não são óbvias:
 
 A lista de ocorrências é dividida em blocos com cabeçalho `Mês — Semana N`.
 Cada cabeçalho pode ser acionado para colapsar ou expandir as ocorrências daquela
-semana, sem alterar os totais nem os pagamentos. As semanas começam expandidas;
-ao recarregar a lista após uma ação, cada semana presente conserva seu estado
-aberto ou fechado. Semanas novas começam expandidas. O bloco separado de
-Empréstimo não participa desse colapso.
+semana, sem alterar os totais nem os pagamentos. Ao abrir a lista, a semana
+destacada como atual começa expandida mesmo se estiver toda paga. Outras
+semanas começam expandidas somente se tiverem ocorrências não pagas, inclusive
+as futuras ou atrasadas; semanas totalmente pagas começam colapsadas. O bloco
+de Empréstimo segue a mesma regra de pendência, mas não a exceção da semana
+atual. Ao recarregar a lista após um pagamento, os blocos sem pendências
+passam a começar fechados. Uma abertura ou um fechamento feito manualmente
+prevalece durante a sessão, mesmo após atualizar a lista.
 
 #### Definição de semana
 
@@ -672,7 +678,8 @@ As verificações automatizadas cobrem as regras determinísticas mais sensívei
 - repetição, divisão, centavos e limite de 24 parcelas;
 - datas, meses sem dia 31 e ano bissexto;
 - semanas iniciadas no domingo e corte na virada do mês;
-- preservação do estado aberto ou fechado das semanas ao atualizar a lista;
+- abertura inicial por pendência e preservação do estado das semanas e do
+  Empréstimo ao atualizar a lista;
 - recorrências, exdates e ocupação das três vagas futuras;
 - escolha exata do primeiro `Aluguel` aberto;
 - contratos essenciais do HTML, como os ícones de início e os dois saldos do
