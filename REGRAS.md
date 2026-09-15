@@ -5,7 +5,7 @@ Não trata de stack, setup ou como rodar — só do que o sistema faz e por quê
 O objetivo é que essas regras não se percam com o tempo, já que boa parte
 delas não é óbvia lendo o código e nenhuma está registrada em outro lugar.
 
-Última revisão: 2026-09-15 (abertura seletiva dos blocos de ocorrências).
+Última revisão: 2026-09-15 (leitura do aporte na linha do Empréstimo).
 
 ---
 
@@ -243,9 +243,11 @@ O valor mostrado é o saldo restante:
 saldo_restante = max(valor_original − soma_dos_aportes, 0)
 ```
 
-Cada linha também mostra o total já aportado. O botão **Aporte** aceita um
-pagamento parcial manual; se o valor informado ultrapassar o saldo, somente o
-necessário para zerar é registrado. Ao chegar a zero, a ocorrência é
+Cada linha mostra a data e o total `Aportado: R$ X` como informações completas,
+sem quebrar a data ou o valor no meio. Em telas estreitas, essas duas
+informações podem ocupar linhas separadas, mantendo cada uma legível. O botão
+**Aporte** aceita um pagamento parcial manual; se o valor informado ultrapassar
+o saldo, somente o necessário para zerar é registrado. Ao chegar a zero, a ocorrência é
 considerada paga e não aceita novos aportes.
 
 Os aportes novos ficam em `emprestimo_aportes`, um por linha, sempre com origem
@@ -674,6 +676,7 @@ As verificações automatizadas cobrem as regras determinísticas mais sensívei
 - saldo do Caixa, abatimento do aluguel e limite em zero;
 - comissão e saldo do Salário;
 - dados do aporte manual, saldo, limite e preservação de aportes antigos do Empréstimo;
+- disposição legível da data e do valor aportado na linha do Empréstimo;
 - saldo, limite de pagamento e proteção ao remover vendas do Fiado;
 - repetição, divisão, centavos e limite de 24 parcelas;
 - datas, meses sem dia 31 e ano bissexto;

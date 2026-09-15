@@ -971,7 +971,9 @@ async function carregarContasPagar() {
           <input type="checkbox" data-conta-id="${conta.id}" data-data="${data}" class="cp-pago-checkbox" ${paga ? 'checked' : ''} ${emprestimo ? 'disabled' : ''}>
           <div class="lancamento-info">
             <span class="lancamento-desc">${conta.descricao}${atrasada ? ' <span class="tag-atrasada">Atrasada</span>' : ''}</span>
-            <span class="lancamento-data">${formatDataBR(data)}${emprestimo ? ` · ${formatMoney(totalAportes)} aportado` : ''}</span>
+            <span class="lancamento-data${emprestimo ? ' emprestimo-meta' : ''}">${emprestimo
+              ? `<span>${formatDataBR(data)}</span><span>Aportado: ${formatMoney(totalAportes)}</span>`
+              : formatDataBR(data)}</span>
           </div>
         </label>
         <span class="lancamento-valor negativo">${formatMoney(valorExibido)}</span>${botoesAcao}
@@ -1670,6 +1672,27 @@ function executarTestes() {
   });
   teste('Interface — descrição de Contas a Pagar é obrigatória', () => {
     igual(document.getElementById('cp-descricao').required, true);
+  });
+  teste('Interface — data e aporte do Empréstimo ficam juntos em largura estreita', () => {
+    const fixture = document.createElement('div');
+    fixture.className = 'emprestimo-grupo';
+    fixture.style.cssText = 'position:absolute;left:-10000px;top:0;width:300px';
+    fixture.innerHTML = '<div class="lancamento-item"><label class="lancamento-checkbox">'
+      + '<input type="checkbox" disabled><div class="lancamento-info">'
+      + '<span class="lancamento-desc">Empréstimo</span>'
+      + '<span class="lancamento-data emprestimo-meta"><span>18/11/2026</span>'
+      + '<span>Aportado: R$ 0,00</span></span></div></label>'
+      + '<span class="lancamento-valor negativo">R$ 500,00</span>'
+      + '<button class="btn-aporte">Aporte</button><button class="btn-icon">Editar</button>'
+      + '<button class="btn-icon">Pular</button></div>';
+    document.body.appendChild(fixture);
+    try {
+      const [data, aportado] = fixture.querySelectorAll('.emprestimo-meta > span');
+      igual(Math.round(data.getBoundingClientRect().top), Math.round(aportado.getBoundingClientRect().top));
+      igual(getComputedStyle(aportado).whiteSpace, 'nowrap');
+    } finally {
+      fixture.remove();
+    }
   });
   teste('Parcelas — quantidade é limitada a 24', () => igual(limitarQuantidadeParcelas('99'), 24));
 
