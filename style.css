@@ -528,6 +528,25 @@ button[type="submit"]:disabled {
   margin-bottom: 8px;
 }
 
+.list .semana-grupo-titulo {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.list .semana-details:not([open]) .semana-grupo-titulo {
+  margin-bottom: 0;
+}
+
+.list .semana-details .semana-grupo-titulo::before {
+  transform: none;
+  flex-shrink: 0;
+}
+
+.list .semana-details[open] .semana-grupo-titulo::before {
+  transform: rotate(90deg);
+}
+
 .semana-grupo-titulo > span:first-child {
   display: flex;
   align-items: center;

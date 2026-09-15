@@ -643,6 +643,10 @@ const cpLabelSemanaAtualEl = document.getElementById('cp-label-semana-atual');
 const cpLabelProximaSemanaEl = document.getElementById('cp-label-proxima-semana');
 const cpListEl = document.getElementById('cp-list');
 const cpContasListEl = document.getElementById('cp-contas-list');
+function capturarSemanasAbertas() {
+  return new Map([...cpListEl.querySelectorAll('.semana-details')]
+    .map((details) => [details.dataset.semana, details.open]));
+}
 const cpForm = document.getElementById('cp-form');
 const cpErrorEl = document.getElementById('cp-form-error');
 const cpDescricaoInput = document.getElementById('cp-descricao');
@@ -1064,19 +1068,24 @@ async function carregarContasPagar() {
   }
 
   function renderizarGruposSemana(grupos) {
+    const semanasAbertas = capturarSemanasAbertas();
     return grupos.map((grupo) => {
       const ehSemanaAtual = ehGrupoDaSemanaAtual(grupo);
       const itensHtml = grupo.itens.map(renderizarItemOcorrencia).join('');
       const rotuloSemana = `Semana ${grupo.semana}`;
       const totalGrupo = grupo.itens.reduce((acc, item) => acc + valorExibidoOcorrencia(item), 0);
+      const chaveSemana = `${grupo.ano}-${grupo.mes}-${grupo.semana}`;
+      const aberta = semanasAbertas.get(chaveSemana) ?? true;
 
       return `
         <li class="semana-grupo">
-          <span class="semana-grupo-titulo${ehSemanaAtual ? ' semana-atual' : ''}">
-            <span>${NOMES_MES[grupo.mes - 1]} — ${rotuloSemana}${ehSemanaAtual ? '<span class="semana-atual-dot"></span>' : ''}</span>
-            <span class="semana-grupo-total">${formatMoney(totalGrupo)}</span>
-          </span>
-          <ul class="lancamentos">${itensHtml}</ul>
+          <details class="semana-details" data-semana="${chaveSemana}"${aberta ? ' open' : ''}>
+            <summary class="semana-grupo-titulo${ehSemanaAtual ? ' semana-atual' : ''}">
+              <span>${NOMES_MES[grupo.mes - 1]} — ${rotuloSemana}${ehSemanaAtual ? '<span class="semana-atual-dot"></span>' : ''}</span>
+              <span class="semana-grupo-total">${formatMoney(totalGrupo)}</span>
+            </summary>
+            <ul class="lancamentos">${itensHtml}</ul>
+          </details>
         </li>
       `;
     }).join('');
@@ -1705,6 +1714,15 @@ function executarTestes() {
     const grupos = agruparPorSemana([{ data: '2026-09-30' }, { data: '2026-10-01' }]);
     igual(grupos.length, 2);
     igualJson(grupos.map((grupo) => [grupo.mes, grupo.itens.length]), [[9, 1], [10, 1]]);
+  });
+  teste('Semanas — mantém o estado aberto ou fechado por semana ao recarregar', () => {
+    cpListEl.innerHTML = '<li><details class="semana-details" data-semana="2026-9-1" open><summary>Semana 1</summary></details></li>'
+      + '<li><details class="semana-details" data-semana="2026-9-2"><summary>Semana 2</summary></details></li>';
+    const semanasAbertas = capturarSemanasAbertas();
+    igual(semanasAbertas.get('2026-9-1'), true);
+    igual(semanasAbertas.get('2026-9-2'), false);
+    igual(semanasAbertas.get('2026-9-3') ?? true, true);
+    cpListEl.innerHTML = '';
   });
 
   teste('Recorrência — respeita início, último dia e data-limite', () => {

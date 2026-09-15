@@ -5,7 +5,7 @@ Não trata de stack, setup ou como rodar — só do que o sistema faz e por quê
 O objetivo é que essas regras não se percam com o tempo, já que boa parte
 delas não é óbvia lendo o código e nenhuma está registrada em outro lugar.
 
-Última revisão: 2026-09-14 (aportes automáticos e manuais no Empréstimo).
+Última revisão: 2026-09-15 (semanas colapsáveis em Contas a Pagar).
 
 ---
 
@@ -523,6 +523,11 @@ Implicações que não são óbvias:
 ### Agrupamento por semana
 
 A lista de ocorrências é dividida em blocos com cabeçalho `Mês — Semana N`.
+Cada cabeçalho pode ser acionado para colapsar ou expandir as ocorrências daquela
+semana, sem alterar os totais nem os pagamentos. As semanas começam expandidas;
+ao recarregar a lista após uma ação, cada semana presente conserva seu estado
+aberto ou fechado. Semanas novas começam expandidas. O bloco separado de
+Empréstimo não participa desse colapso.
 
 #### Definição de semana
 
@@ -681,6 +686,7 @@ As verificações automatizadas cobrem as regras determinísticas mais sensívei
 - repetição, divisão, centavos e limite de 24 parcelas;
 - datas, meses sem dia 31 e ano bissexto;
 - semanas iniciadas no domingo e corte na virada do mês;
+- preservação do estado aberto ou fechado das semanas ao atualizar a lista;
 - recorrências, exdates e ocupação das três vagas futuras;
 - escolha exata do primeiro `Aluguel` aberto;
 - contratos essenciais do HTML, como os ícones de início e os dois saldos do
