@@ -702,11 +702,12 @@ function gerarOcorrenciasRecorrenteAte(conta, exdates, ate) {
   return ocorrencias;
 }
 
-// Ocorrências vencidas (< hoje) e não pagas de uma conta recorrente, mais
-// as próximas `qtdeFuturas` a partir de hoje (inclusive).
-function gerarOcorrenciasRecorrenteParaExibir(conta, exdates, pagosSet, qtdeFuturas, hoje = hojeISO()) {
-  const atrasadas = gerarOcorrenciasRecorrenteAte(conta, exdates, hoje)
-    .filter((data) => data < hoje && !pagosSet.has(`${conta.id}|${data}`));
+// Todas as ocorrências vencidas (< hoje) de uma conta recorrente, mais as
+// próximas `qtdeFuturas` a partir de hoje (inclusive). As pagas permanecem
+// visíveis para preservar o histórico e permitir desfazer uma baixa.
+function gerarOcorrenciasRecorrenteParaExibir(conta, exdates, qtdeFuturas, hoje = hojeISO()) {
+  const vencidas = gerarOcorrenciasRecorrenteAte(conta, exdates, hoje)
+    .filter((data) => data < hoje);
 
   const futuras = [];
   const [anoIni, mesIni] = hoje.split('-').map(Number);
@@ -725,7 +726,7 @@ function gerarOcorrenciasRecorrenteParaExibir(conta, exdates, pagosSet, qtdeFutu
     }
   }
 
-  return [...atrasadas, ...futuras];
+  return [...vencidas, ...futuras];
 }
 
 function encontrarPrimeiroAluguelAberto(contas, exdatesRows, parcelasRows, pagos, ajustesRows) {
@@ -743,7 +744,7 @@ function encontrarPrimeiroAluguelAberto(contas, exdatesRows, parcelasRows, pagos
       const exdates = new Set(
         exdatesRows.filter((exdate) => exdate.conta_id === conta.id).map((exdate) => exdate.data)
       );
-      ocorrencias = gerarOcorrenciasRecorrenteParaExibir(conta, exdates, pagosSet, pagos.length + 1)
+      ocorrencias = gerarOcorrenciasRecorrenteParaExibir(conta, exdates, pagos.length + 1)
         .map((data) => ({
           data,
           valor: ajustesMap.get(`${conta.id}|${data}`) ?? Number(conta.valor),
@@ -828,7 +829,7 @@ async function carregarContasPagar() {
       const exdatesDaConta = new Set(
         exdatesRows.filter((e) => e.conta_id === conta.id).map((e) => e.data)
       );
-      ocorrencias = gerarOcorrenciasRecorrenteParaExibir(conta, exdatesDaConta, pagosSet, 3)
+      ocorrencias = gerarOcorrenciasRecorrenteParaExibir(conta, exdatesDaConta, 3)
         .map((data) => ({
           data,
           valor: ajustesMap.get(`${conta.id}|${data}`) ?? Number(conta.valor),
@@ -1644,9 +1645,13 @@ function executarTestes() {
   });
   teste('Recorrência — pagas futuras continuam ocupando uma das três vagas', () => {
     const conta = { id: 'c1', data_inicio: '2024-01-31', dia_vencimento: 31 };
-    const pagos = new Set(['c1|2024-01-31', 'c1|2024-03-31']);
-    igualJson(gerarOcorrenciasRecorrenteParaExibir(conta, new Set(['2024-02-29']), pagos, 3, '2024-03-15'),
+    igualJson(gerarOcorrenciasRecorrenteParaExibir(conta, new Set(['2024-02-29']), 3, '2024-03-15'),
       ['2024-03-31', '2024-04-30', '2024-05-31']);
+  });
+  teste('Recorrência — baixa de ocorrência vencida preserva sua linha', () => {
+    const conta = { id: 'c1', data_inicio: '2024-01-20', dia_vencimento: 20 };
+    igualJson(gerarOcorrenciasRecorrenteParaExibir(conta, new Set(), 3, '2024-09-21'),
+      ['2024-01-20', '2024-02-20', '2024-03-20', '2024-04-20', '2024-05-20', '2024-06-20', '2024-07-20', '2024-08-20', '2024-09-20', '2024-10-20', '2024-11-20', '2024-12-20']);
   });
   teste('Aluguel — escolhe a primeira ocorrência aberta e ignora nomes aproximados', () => {
     const contas = [

@@ -291,16 +291,18 @@ março seguinte volta a cair no dia 31.
 
 A lista mostra, por conta:
 
-- **Todas** as ocorrências vencidas e não pagas (sem limite, desde `data_inicio`)
+- **Todas** as ocorrências vencidas, pagas ou não (sem limite, desde `data_inicio`)
 - As **3 próximas** a partir de hoje (inclusive)
 
 O limite de 3 é sobre as futuras, não sobre o total. Uma conta com 5 meses
-de atraso mostra 5 atrasadas + 3 futuras = 8 linhas.
+de atraso mostra 5 atrasadas + 3 futuras = 8 linhas; as ocorrências já
+quitadas também permanecem no respectivo grupo semanal como histórico.
 
-Uma ocorrência já paga **continua aparecendo** (com o checkbox marcado) e
-ocupa uma das 3 vagas de futuras. Isso é intencional: permite desmarcar um
-pagamento feito por engano direto na lista, sem precisar procurar em outro
-lugar.
+Uma ocorrência já paga **continua aparecendo** (com o checkbox marcado),
+inclusive depois do vencimento, e ocupa uma das 3 vagas quando for futura.
+Isso é intencional: preserva o histórico do valor ajustado e permite
+desmarcar um pagamento feito por engano direto na lista, sem precisar
+procurar em outro lugar.
 
 ---
 
