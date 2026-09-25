@@ -535,6 +535,10 @@ Consequência: a Semana 1 pode ter menos de 7 dias. Se o mês começa numa
 terça, a Semana 1 tem 5 dias (terça a sábado), porque o domingo daquela
 semana ficou no mês anterior.
 
+Ao procurar a próxima semana com pendências, o avanço é até o **próximo
+domingo**. Assim, em uma sexta-feira 25/09, a próxima semana é a Semana 5 de
+setembro (27 a 30/09), e não uma semana calculada a partir de 02/10.
+
 #### Agrupamento é por mês da data
 
 Uma semana que atravessa a virada do mês é **cortada**: uma ocorrência em

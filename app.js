@@ -174,12 +174,15 @@ function semanaDoMes(isoDate) {
   return Math.ceil((dia + offsetAteDomingo(ano, mes)) / 7);
 }
 
-// Dada uma data, retorna a identidade (ano, mês, semana) de uma data que
-// cai 7 dias depois — usado para "andar" de semana em semana cruzando
-// meses sem depender dos grupos já calculados.
+// Dada uma data, retorna a identidade do próximo domingo — usado para
+// "andar" de semana em semana cruzando meses sem depender dos grupos já
+// calculados. Mesmo quando a referência cai no meio da semana, o avanço deve
+// alcançar a próxima semana de calendário, não somente a mesma data + 7.
 function chaveSemanaSeguinte(isoDate) {
   const [ano, mes, dia] = isoDate.split('-').map(Number);
-  const data = new Date(ano, mes - 1, dia + 7);
+  const dataAtual = new Date(ano, mes - 1, dia);
+  const diasAteProximoDomingo = 7 - dataAtual.getDay();
+  const data = new Date(ano, mes - 1, dia + diasAteProximoDomingo);
   const anoSeguinte = data.getFullYear();
   const mesSeguinte = data.getMonth() + 1;
   const diaSeguinte = data.getDate();
@@ -1608,8 +1611,11 @@ function executarTestes() {
   teste('Datas — dia 31 ancora no dia 30 de abril', () => igual(montarDataOcorrencia(2026, 3, 31), '2026-04-30'));
   teste('Semanas — mês iniciado na terça mantém sábado na semana 1', () => igual(semanaDoMes('2026-09-05'), 1));
   teste('Semanas — domingo inicia uma nova semana', () => igual(semanaDoMes('2026-09-06'), 2));
-  teste('Semanas — avanço cruza o mês e recalcula a semana', () => {
+  teste('Semanas — avanço a partir do domingo cruza o mês e recalcula a semana', () => {
     igualJson(chaveSemanaSeguinte('2026-09-27'), { ano: 2026, mes: 10, semana: 2, data: '2026-10-04' });
+  });
+  teste('Semanas — avanço no meio da semana vai ao próximo domingo', () => {
+    igualJson(chaveSemanaSeguinte('2026-09-25'), { ano: 2026, mes: 9, semana: 5, data: '2026-09-27' });
   });
   teste('Semanas — agrupamento corta a semana na virada do mês', () => {
     const grupos = agruparPorSemana([{ data: '2026-09-30' }, { data: '2026-10-01' }]);
