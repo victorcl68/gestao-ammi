@@ -185,6 +185,14 @@ Uma venda sem descrição aparece como `Comissão (venda de R$ X)`, onde X é o
 `venda_base`. Com descrição preenchida, a descrição substitui esse texto —
 e o valor da venda base deixa de aparecer na lista.
 
+### Aviso de dias sem venda
+
+Desde a data da primeira venda registrada, o sistema verifica todos os dias
+até hoje, exceto domingos. Se algum desses dias não possuir venda, mostra um
+modal simples com as datas faltantes e a orientação para ajustá-las diretamente
+no banco. O aviso é somente de leitura: não cria, edita ou apaga lançamentos,
+e aparece no máximo uma vez por sessão.
+
 ---
 
 ## Módulo: Contas a Pagar

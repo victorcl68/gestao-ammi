@@ -86,6 +86,29 @@ function calcularSaldoSalario(lancamentos) {
   }, 0));
 }
 
+// Retorna os dias não-domingo sem venda entre a primeira venda e hoje.
+// A verificação é apenas informativa: não cria nem modifica lançamentos.
+function datasSemVendaEmDiasUteis(vendas, hoje) {
+  const datasVendas = new Set(vendas
+    .map((venda) => venda.data)
+    .filter((data) => data <= hoje));
+  const primeiraData = [...datasVendas].sort()[0];
+  if (!primeiraData) return [];
+
+  const [ano, mes, dia] = primeiraData.split('-').map(Number);
+  const dataAtual = new Date(ano, mes - 1, dia);
+  const faltantes = [];
+
+  while (true) {
+    const data = `${dataAtual.getFullYear()}-${String(dataAtual.getMonth() + 1).padStart(2, '0')}-${String(dataAtual.getDate()).padStart(2, '0')}`;
+    if (data > hoje) break;
+    if (dataAtual.getDay() !== 0 && !datasVendas.has(data)) faltantes.push(data);
+    dataAtual.setDate(dataAtual.getDate() + 1);
+  }
+
+  return faltantes;
+}
+
 function calcularSaldoFiado(vendas, pagamentos) {
   const totalVendas = vendas.reduce((acc, item) => acc + Number(item.valor), 0);
   const totalPagamentos = pagamentos.reduce((acc, item) => acc + Number(item.valor), 0);
@@ -431,6 +454,10 @@ bloquearDuranteSubmit(ccForm, async (e) => {
 
 const salSaldoEl = document.getElementById('sal-saldo');
 const salListEl = document.getElementById('sal-list');
+const salAvisoDiasSemVendaEl = document.getElementById('sal-aviso-dias-sem-venda');
+const salAvisoDiasSemVendaTextoEl = document.getElementById('sal-aviso-dias-sem-venda-texto');
+const salAvisoDiasSemVendaFecharEl = document.getElementById('sal-aviso-dias-sem-venda-fechar');
+let avisoDiasSemVendaExibido = false;
 
 const salVendaForm = document.getElementById('sal-venda-form');
 const salVendaValorInput = document.getElementById('sal-venda-valor');
@@ -468,6 +495,18 @@ function updateSalVendaSubmitLabel() {
 
 salVendaValorInput.addEventListener('input', updateSalVendaSubmitLabel);
 
+function mostrarAvisoDiasSemVenda(vendas) {
+  if (avisoDiasSemVendaExibido) return;
+  const faltantes = datasSemVendaEmDiasUteis(vendas, hojeISO());
+  if (faltantes.length === 0) return;
+
+  avisoDiasSemVendaExibido = true;
+  salAvisoDiasSemVendaTextoEl.textContent = `Faltam vendas em ${faltantes.length} dia(s): ${faltantes.map(formatDataBR).join(', ')}. Ajuste os registros diretamente no banco.`;
+  salAvisoDiasSemVendaEl.showModal();
+}
+
+salAvisoDiasSemVendaFecharEl.addEventListener('click', () => salAvisoDiasSemVendaEl.close());
+
 async function carregarSalario() {
   salVendaDataInput.value = salVendaDataInput.value || hojeISO();
   salPagamentoDataInput.value = salPagamentoDataInput.value || hojeISO();
@@ -487,6 +526,14 @@ async function carregarSalario() {
   const saldo = calcularSaldoSalario(data);
   salSaldoEl.textContent = formatMoney(saldo);
   salSaldoEl.classList.toggle('negative', saldo < 0);
+
+  const { data: vendasHistoricas, error: erroVendasHistoricas } = await supabase
+    .from(SAL_TABLE)
+    .select('data')
+    .eq('tipo', 'venda')
+    .order('data', { ascending: true });
+
+  if (!erroVendasHistoricas) mostrarAvisoDiasSemVenda(vendasHistoricas);
 
   if (data.length === 0) {
     salListEl.innerHTML = `<li class="empty-state">Nenhum lançamento ainda.</li>`;
@@ -1579,6 +1626,16 @@ function executarTestes() {
   });
   teste('Salário — vendas somam e pagamentos subtraem', () => {
     igual(calcularSaldoSalario([{ tipo: 'venda', valor: 80 }, { tipo: 'pagamento', valor: 30 }]), 50);
+  });
+  teste('Salário — avisa dias sem venda, exceto domingo, desde a primeira venda', () => {
+    igualJson(datasSemVendaEmDiasUteis([
+      { data: '2026-09-01' }, { data: '2026-09-03' }, { data: '2026-09-07' },
+    ], '2026-09-07'), ['2026-09-02', '2026-09-04', '2026-09-05']);
+  });
+  teste('Salário — não avisa quando só falta domingo', () => {
+    igualJson(datasSemVendaEmDiasUteis([
+      { data: '2026-09-05' }, { data: '2026-09-07' },
+    ], '2026-09-07'), []);
   });
   teste('Fiado — pagamentos abatem vendas', () => {
     igual(calcularSaldoFiado([{ valor: 100 }, { valor: 50 }], [{ valor: 40 }]), 110);
