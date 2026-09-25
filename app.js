@@ -86,7 +86,7 @@ function calcularSaldoSalario(lancamentos) {
   }, 0));
 }
 
-// Retorna os dias não-domingo sem venda entre a primeira venda e hoje.
+// Retorna os dias não-domingo sem venda entre a primeira venda e a data-limite.
 // A verificação é apenas informativa: não cria nem modifica lançamentos.
 function datasSemVendaEmDiasUteis(vendas, hoje) {
   const datasVendas = new Set(vendas
@@ -175,6 +175,12 @@ function hojeISO() {
     day: '2-digit',
   });
   return formatter.format(new Date());
+}
+
+function dataAnteriorISO(isoDate) {
+  const [ano, mes, dia] = isoDate.split('-').map(Number);
+  const data = new Date(ano, mes - 1, dia - 1);
+  return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`;
 }
 
 function formatDataBR(isoDate) {
@@ -497,7 +503,7 @@ salVendaValorInput.addEventListener('input', updateSalVendaSubmitLabel);
 
 function mostrarAvisoDiasSemVenda(vendas) {
   if (avisoDiasSemVendaExibido) return;
-  const faltantes = datasSemVendaEmDiasUteis(vendas, hojeISO());
+  const faltantes = datasSemVendaEmDiasUteis(vendas, dataAnteriorISO(hojeISO()));
   if (faltantes.length === 0) return;
 
   avisoDiasSemVendaExibido = true;
@@ -1627,10 +1633,10 @@ function executarTestes() {
   teste('Salário — vendas somam e pagamentos subtraem', () => {
     igual(calcularSaldoSalario([{ tipo: 'venda', valor: 80 }, { tipo: 'pagamento', valor: 30 }]), 50);
   });
-  teste('Salário — avisa dias sem venda, exceto domingo, desde a primeira venda', () => {
+  teste('Salário — avisa dias sem venda, exceto domingo, até ontem', () => {
     igualJson(datasSemVendaEmDiasUteis([
-      { data: '2026-09-01' }, { data: '2026-09-03' }, { data: '2026-09-07' },
-    ], '2026-09-07'), ['2026-09-02', '2026-09-04', '2026-09-05']);
+      { data: '2026-09-01' }, { data: '2026-09-03' },
+    ], dataAnteriorISO('2026-09-07')), ['2026-09-02', '2026-09-04', '2026-09-05']);
   });
   teste('Salário — não avisa quando só falta domingo', () => {
     igualJson(datasSemVendaEmDiasUteis([

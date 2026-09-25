@@ -188,10 +188,11 @@ e o valor da venda base deixa de aparecer na lista.
 ### Aviso de dias sem venda
 
 Desde a data da primeira venda registrada, o sistema verifica todos os dias
-até hoje, exceto domingos. Se algum desses dias não possuir venda, mostra um
-modal simples com as datas faltantes e a orientação para ajustá-las diretamente
-no banco. O aviso é somente de leitura: não cria, edita ou apaga lançamentos,
-e aparece no máximo uma vez por sessão.
+até **ontem**, exceto domingos. O dia em andamento nunca é avisado, pois a
+venda ainda pode ser registrada. Se algum dos demais dias não possuir venda,
+mostra um modal simples com as datas faltantes e a orientação para ajustá-las
+diretamente no banco. O aviso é somente de leitura: não cria, edita ou apaga
+lançamentos, e aparece no máximo uma vez por sessão.
 
 ---
 
